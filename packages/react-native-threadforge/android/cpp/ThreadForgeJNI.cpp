@@ -1,4 +1,4 @@
-#include <android/log.h>
+// Author: Abhishek Kumar
 #include <jni.h>
 
 #include <algorithm>
@@ -8,9 +8,6 @@
 
 #include "CustomTaskRegistry.h"
 #include "TaskUtils.h"
-
-#define LOG_TAG "ThreadForge"
-#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 
 using namespace threadforge;
 
@@ -68,7 +65,6 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
 
 JNIEXPORT void JNICALL
 Java_com_threadforge_ThreadForgeModule_nativeInitialize(JNIEnv*, jobject, jint threadCount) {
-    LOGI("Initializing with %d threads", threadCount);
     ensureThreadPool(static_cast<size_t>(std::max(1, threadCount)));
 }
 

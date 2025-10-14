@@ -1,3 +1,4 @@
+// Author: Abhishek Kumar
 import { NativeEventEmitter, NativeModules, type EmitterSubscription } from 'react-native';
 
 type NativeThreadForgeModule = {
@@ -20,6 +21,8 @@ type NativeThreadForgeModule = {
 };
 
 const { ThreadForge } = NativeModules as { ThreadForge: NativeThreadForgeModule };
+
+export const DEFAULT_PROGRESS_THROTTLE_MS = 100;
 
 const PROGRESS_EVENT = 'threadforge_progress';
 
