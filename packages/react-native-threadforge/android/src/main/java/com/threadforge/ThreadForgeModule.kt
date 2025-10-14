@@ -5,10 +5,14 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.module.annotations.ReactModule
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 @ReactModule(name = ThreadForgeModule.NAME)
 class ThreadForgeModule(reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {
+
+    private val executor: ExecutorService = Executors.newCachedThreadPool()
 
     companion object {
         const val NAME = "ThreadForge"
@@ -24,6 +28,11 @@ class ThreadForgeModule(reactContext: ReactApplicationContext) :
 
     override fun getName(): String = NAME
 
+    override fun invalidate() {
+        super.invalidate()
+        executor.shutdownNow()
+    }
+
     @ReactMethod
     fun initialize(threadCount: Int, promise: Promise) {
         try {
@@ -36,11 +45,13 @@ class ThreadForgeModule(reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun executeTask(taskId: String, priority: Int, taskData: String, promise: Promise) {
-        try {
-            val result = nativeExecuteTask(taskId, priority, taskData)
-            promise.resolve(result)
-        } catch (e: Exception) {
-            promise.reject("TASK_ERROR", e.message, e)
+        executor.execute {
+            try {
+                val result = nativeExecuteTask(taskId, priority, taskData)
+                promise.resolve(result)
+            } catch (e: Exception) {
+                promise.reject("TASK_ERROR", e.message, e)
+            }
         }
     }
 

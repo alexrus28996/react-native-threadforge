@@ -1,14 +1,16 @@
 #pragma once
 
-#include <thread>
-#include <queue>
-#include <mutex>
-#include <condition_variable>
-#include <functional>
-#include <vector>
 #include <atomic>
+#include <condition_variable>
+#include <cstdint>
+#include <functional>
+#include <memory>
+#include <mutex>
+#include <queue>
 #include <string>
+#include <thread>
 #include <unordered_map>
+#include <vector>
 
 namespace threadforge {
 
@@ -23,12 +25,23 @@ struct Task {
     std::function<std::string()> work;
     TaskPriority priority;
     std::atomic<bool> cancelled{false};
-    
-    Task(std::string taskId, std::function<std::string()> fn, TaskPriority prio = TaskPriority::NORMAL)
-        : id(std::move(taskId)), work(std::move(fn)), priority(prio) {}
-    
-    bool operator<(const Task& other) const {
-        return priority < other.priority;
+    uint64_t sequence{0};
+
+    std::mutex mutex;
+    std::condition_variable completionCv;
+    bool finished{false};
+    std::string result;
+
+    Task(std::string taskId, std::function<std::string()> fn, TaskPriority prio, uint64_t seq)
+        : id(std::move(taskId)), work(std::move(fn)), priority(prio), sequence(seq) {}
+};
+
+struct TaskComparator {
+    bool operator()(const std::shared_ptr<Task>& lhs, const std::shared_ptr<Task>& rhs) const {
+        if (lhs->priority == rhs->priority) {
+            return lhs->sequence > rhs->sequence;
+        }
+        return static_cast<int>(lhs->priority) < static_cast<int>(rhs->priority);
     }
 };
 
@@ -50,14 +63,15 @@ private:
     void workerThread();
     
     std::vector<std::thread> workers;
-    std::priority_queue<std::shared_ptr<Task>, std::vector<std::shared_ptr<Task>>> tasks;
+    std::priority_queue<std::shared_ptr<Task>, std::vector<std::shared_ptr<Task>>, TaskComparator> tasks;
     std::unordered_map<std::string, std::shared_ptr<Task>> taskMap;
-    
+
     mutable std::mutex queueMutex;
     std::condition_variable condition;
     std::atomic<bool> stop{false};
     std::atomic<size_t> pendingTasks{0};
     std::atomic<size_t> activeTasks{0};
+    std::atomic<uint64_t> sequenceCounter{0};
 };
 
 } // namespace threadforge

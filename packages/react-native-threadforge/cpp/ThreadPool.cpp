@@ -15,73 +15,116 @@ ThreadPool::~ThreadPool() {
 void ThreadPool::workerThread() {
     while (true) {
         std::shared_ptr<Task> task;
-        
+
         {
             std::unique_lock<std::mutex> lock(queueMutex);
             condition.wait(lock, [this] {
                 return stop || !tasks.empty();
             });
-            
+
             if (stop && tasks.empty()) {
                 return;
             }
-            
+
             task = tasks.top();
             tasks.pop();
-            
+            pendingTasks--;
+
             if (task->cancelled) {
                 taskMap.erase(task->id);
-                pendingTasks--;
+                {
+                    std::lock_guard<std::mutex> taskLock(task->mutex);
+                    task->result = "Task cancelled";
+                    task->finished = true;
+                }
+                task->completionCv.notify_all();
                 continue;
             }
-            
+
             activeTasks++;
         }
-        
-        // Execute task
-        task->work();
-        
+
+        std::string taskResult;
+        try {
+            taskResult = task->work();
+        } catch (const std::exception& ex) {
+            taskResult = std::string("Task error: ") + ex.what();
+        } catch (...) {
+            taskResult = "Task error: unknown exception";
+        }
+
         {
             std::lock_guard<std::mutex> lock(queueMutex);
             taskMap.erase(task->id);
-            pendingTasks--;
             activeTasks--;
         }
+
+        {
+            std::lock_guard<std::mutex> taskLock(task->mutex);
+            if (task->cancelled && task->result.empty()) {
+                task->result = "Task cancelled";
+            } else if (!task->cancelled) {
+                task->result = std::move(taskResult);
+            }
+            task->finished = true;
+        }
+
+        task->completionCv.notify_all();
     }
 }
 
 std::string ThreadPool::submitTask(const std::string& taskId, TaskPriority priority, std::function<std::string()> task) {
-    auto taskObj = std::make_shared<Task>(taskId, std::move(task), priority);
-    
+    auto sequence = sequenceCounter.fetch_add(1);
+    auto taskObj = std::make_shared<Task>(taskId, std::move(task), priority, sequence);
+
     {
         std::unique_lock<std::mutex> lock(queueMutex);
         if (stop) {
             return "Error: ThreadPool is stopped";
         }
-        
+
         tasks.push(taskObj);
         taskMap[taskId] = taskObj;
         pendingTasks++;
     }
-    
+
     condition.notify_one();
-    
-    // Wait for task to complete
-    while (taskMap.count(taskId) > 0 && !taskObj->cancelled) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+    std::unique_lock<std::mutex> completionLock(taskObj->mutex);
+    taskObj->completionCv.wait(completionLock, [&taskObj] {
+        return taskObj->finished;
+    });
+
+    if (taskObj->result.empty()) {
+        return taskObj->cancelled ? "Task cancelled" : "Task completed";
     }
-    
-    return taskObj->cancelled ? "Task cancelled" : "Task completed";
+
+    return taskObj->result;
 }
 
 bool ThreadPool::cancelTask(const std::string& taskId) {
-    std::lock_guard<std::mutex> lock(queueMutex);
-    auto it = taskMap.find(taskId);
-    if (it != taskMap.end()) {
-        it->second->cancelled = true;
-        return true;
+    std::shared_ptr<Task> taskRef;
+    {
+        std::lock_guard<std::mutex> lock(queueMutex);
+        auto it = taskMap.find(taskId);
+        if (it == taskMap.end()) {
+            return false;
+        }
+        taskRef = it->second;
+        taskRef->cancelled = true;
     }
-    return false;
+
+    {
+        std::lock_guard<std::mutex> taskLock(taskRef->mutex);
+        if (taskRef->result.empty()) {
+            taskRef->result = "Task cancelled";
+        }
+        taskRef->finished = true;
+    }
+
+    taskRef->completionCv.notify_all();
+    condition.notify_all();
+    return true;
 }
 
 size_t ThreadPool::getThreadCount() const {
@@ -101,13 +144,21 @@ void ThreadPool::shutdown() {
         std::unique_lock<std::mutex> lock(queueMutex);
         stop = true;
     }
-    
+
     condition.notify_all();
-    
+
     for (std::thread& worker : workers) {
         if (worker.joinable()) {
             worker.join();
         }
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(queueMutex);
+        tasks = decltype(tasks)();
+        taskMap.clear();
+        pendingTasks = 0;
+        activeTasks = 0;
     }
 }
 
