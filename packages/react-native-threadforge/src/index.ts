@@ -1,6 +1,21 @@
 import { NativeModules } from 'react-native';
 
-const { ThreadForge } = NativeModules;
+type Primitive = string | number | boolean | undefined;
+
+type NativeThreadForgeModule = {
+  initialize(threadCount: number): Promise<boolean>;
+  executeTask(taskId: string, priority: number, payload: string): Promise<string>;
+  cancelTask(taskId: string): Promise<boolean>;
+  pause(): Promise<boolean>;
+  resume(): Promise<boolean>;
+  isPaused(): Promise<boolean>;
+  getThreadCount(): Promise<number>;
+  getPendingTaskCount(): Promise<number>;
+  getActiveTaskCount(): Promise<number>;
+  shutdown(): Promise<boolean>;
+};
+
+const { ThreadForge } = NativeModules as { ThreadForge: NativeThreadForgeModule };
 
 export enum TaskPriority {
   LOW = 0,
@@ -8,36 +23,90 @@ export enum TaskPriority {
   HIGH = 2,
 }
 
+export type ThreadForgeTaskDescriptor =
+  | { type: 'HEAVY_LOOP'; iterations: number }
+  | { type: 'TIMED_LOOP'; durationMs: number }
+  | { type: 'MIXED_LOOP'; iterations: number; offset?: number }
+  | { type: 'INSTANT_MESSAGE'; message: string };
+
+export type ThreadForgeScheduledTask = {
+  id: string;
+  descriptor: ThreadForgeTaskDescriptor;
+  priority?: TaskPriority;
+};
+
+const serializeTaskDescriptor = (descriptor: ThreadForgeTaskDescriptor): string => {
+  const { type, ...rest } = descriptor as Record<string, Primitive>;
+  const typeLabel = String(type);
+  const encoded = Object.entries(rest)
+    .filter(([, value]) => value !== undefined)
+    .map(([key, value]) => `${key}=${value}`)
+    .join('|');
+  return encoded ? `${typeLabel}|${encoded}` : typeLabel;
+};
+
 class ThreadForgeEngine {
   private initialized = false;
 
   async initialize(threadCount = 4) {
-    ThreadForge.initialize(threadCount);
+    await ThreadForge.initialize(threadCount);
     this.initialized = true;
   }
 
-  async runTask(taskId:any, task:any, priority = TaskPriority.NORMAL) {
+  private ensureInitialized() {
     if (!this.initialized) {
-      throw new Error('Not initialized');
+      throw new Error('ThreadForge has not been initialized');
     }
-    return task();
   }
 
-  async runParallelTasks(tasks:any) {
-    const promises = tasks.map((t) => this.runTask(t.id, t.task, t.priority || TaskPriority.NORMAL));
-    return Promise.all(promises);
+  async runTask(taskId: string, descriptor: ThreadForgeTaskDescriptor, priority = TaskPriority.NORMAL) {
+    this.ensureInitialized();
+    const taskPayload = serializeTaskDescriptor(descriptor);
+    return ThreadForge.executeTask(taskId, priority, taskPayload);
+  }
+
+  async cancelTask(taskId: string) {
+    this.ensureInitialized();
+    return ThreadForge.cancelTask(taskId);
+  }
+
+  async pause() {
+    this.ensureInitialized();
+    await ThreadForge.pause();
+  }
+
+  async resume() {
+    this.ensureInitialized();
+    await ThreadForge.resume();
+  }
+
+  async isPaused() {
+    this.ensureInitialized();
+    return ThreadForge.isPaused();
+  }
+
+  async runParallelTasks(tasks: ThreadForgeScheduledTask[]) {
+    return Promise.all(
+      tasks.map((task) => this.runTask(task.id, task.descriptor, task.priority ?? TaskPriority.NORMAL)),
+    );
   }
 
   async getStats() {
-    return {
-      threadCount: ThreadForge.getThreadCount(),
-      pendingTasks: 0,
-      activeTasks: 0
-    };
+    this.ensureInitialized();
+    const [threadCount, pendingTasks, activeTasks] = await Promise.all([
+      ThreadForge.getThreadCount(),
+      ThreadForge.getPendingTaskCount(),
+      ThreadForge.getActiveTaskCount(),
+    ]);
+
+    return { threadCount, pendingTasks, activeTasks };
   }
 
   async shutdown() {
-    ThreadForge.shutdown();
+    if (!this.initialized) {
+      return;
+    }
+    await ThreadForge.shutdown();
     this.initialized = false;
   }
 
