@@ -87,11 +87,17 @@ RCT_REMAP_METHOD(executeTask,
     return;
   }
 
-  const auto descriptor = parseTaskData(safeString(payload));
-  auto work = createTaskFunction(descriptor);
-  const auto result = threadPool->submitTask(safeString(taskId), toTaskPriority([priority intValue]), std::move(work));
+  try {
+    const auto descriptor = parseTaskData(safeString(payload));
+    auto work = createTaskFunction(descriptor);
+    const auto result = threadPool->submitTask(safeString(taskId), toTaskPriority([priority intValue]), std::move(work));
 
-  resolve([NSString stringWithUTF8String:result.c_str()]);
+    resolve([NSString stringWithUTF8String:result.c_str()]);
+  } catch (const std::exception &ex) {
+    reject(@"E_TASK", [NSString stringWithUTF8String:ex.what()], nil);
+  } catch (...) {
+    reject(@"E_TASK", @"Unknown task error", nil);
+  }
 }
 
 RCT_REMAP_METHOD(cancelTask,

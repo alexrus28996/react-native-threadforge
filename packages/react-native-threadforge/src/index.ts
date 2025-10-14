@@ -1,7 +1,5 @@
 import { NativeModules } from 'react-native';
 
-type Primitive = string | number | boolean | undefined;
-
 type NativeThreadForgeModule = {
   initialize(threadCount: number): Promise<boolean>;
   executeTask(taskId: string, priority: number, payload: string): Promise<string>;
@@ -36,13 +34,7 @@ export type ThreadForgeScheduledTask = {
 };
 
 const serializeTaskDescriptor = (descriptor: ThreadForgeTaskDescriptor): string => {
-  const { type, ...rest } = descriptor as Record<string, Primitive>;
-  const typeLabel = String(type);
-  const encoded = Object.entries(rest)
-    .filter(([, value]) => value !== undefined)
-    .map(([key, value]) => `${key}=${value}`)
-    .join('|');
-  return encoded ? `${typeLabel}|${encoded}` : typeLabel;
+  return JSON.stringify(descriptor);
 };
 
 class ThreadForgeEngine {

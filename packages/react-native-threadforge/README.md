@@ -41,4 +41,8 @@ async function bootstrap() {
 }
 ```
 
+Task descriptors are now serialized using JSON under the hood. This means you can pass native
+JavaScript objects directly to the `runTask` helper and the native layer will validate and parse the
+payload, while still accepting legacy string-encoded descriptors for backwards compatibility.
+
 Refer to the sample application in this repository for more advanced usage examples.
