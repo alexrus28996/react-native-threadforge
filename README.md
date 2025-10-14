@@ -14,9 +14,26 @@ C++.
 
 - 🔧 Configurable native thread pool used for all heavy computation.
 - 🔁 Queued tasks with priorities (low, normal, high).
+- 🛑 Cooperative cancellation support for long-running jobs.
+- ⏸️ One-line pause/resume controls to orchestrate bursts of native work.
 - 📊 Live stats for active, pending, and allocated worker threads.
 - 🧵 Sample UI with long-running simulations to prove the UI stays responsive while
   background jobs run in parallel.
+
+## Why ThreadForge?
+
+ThreadForge is designed as a production-ready alternative to ad-hoc "runOnQueue"
+helpers or JS-only worker shims. It stands out because it:
+
+- **Keeps the UI fluid** – heavy work never touches the JS or main threads thanks to a
+  modern C++ priority queue scheduler.
+- **Ships a type-safe API** – the exported TypeScript surface mirrors the native
+  contract so you get autocompletion, linting, and compile-time validation.
+- **Offers predictable control** – you can cancel tasks, pause scheduling during
+  critical UI interactions, and resume later without tearing anything down.
+- **Minimizes overhead** – tasks are serialized once and executed directly in native
+  code, eliminating the JSON parsing and context switching overhead common in
+  bridge-based implementations.
 
 ## Prerequisites
 
@@ -59,11 +76,44 @@ keeps incrementing smoothly while the background tasks are running.
 ## How It Works
 
 - The JavaScript API lives in `packages/react-native-threadforge/src/index.ts` and
-  serializes task descriptors before sending them over the native bridge.
+  serializes task descriptors before sending them over the native bridge. It also
+  exposes helpers such as `cancelTask`, `pause`, and `resume` to control native
+  execution directly from JS.
 - On Android, the `ThreadForgeModule` Kotlin class manages a cached executor that calls
   into the JNI bindings exposed by `ThreadForgeJNI.cpp`.
 - The JNI layer forwards the work to a C++ `ThreadPool` implementation that schedules
   tasks onto worker threads based on priority, keeping the UI thread free.
+
+## API Overview
+
+```ts
+import { threadForge, TaskPriority } from 'react-native-threadforge';
+
+await threadForge.initialize(6);
+
+// Fire and await a heavy task
+const result = await threadForge.runTask('prime-search', {
+  type: 'HEAVY_LOOP',
+  iterations: 1_000_000,
+}, TaskPriority.HIGH);
+
+// Temporarily pause execution (pending work stays in the queue)
+await threadForge.pause();
+
+// Cancel an in-flight task if the user navigates away
+await threadForge.cancelTask('prime-search');
+
+// Resume the queue when it is safe to continue
+await threadForge.resume();
+
+// Inspect how the pool is doing
+const stats = await threadForge.getStats();
+
+await threadForge.shutdown();
+```
+
+Every helper enforces initialization and returns Promises, making it trivial to hook
+into React components, sagas, or async thunks.
 
 ## Troubleshooting
 

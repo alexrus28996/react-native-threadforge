@@ -66,6 +66,36 @@ class ThreadForgeModule(reactContext: ReactApplicationContext) :
     }
 
     @ReactMethod
+    fun pause(promise: Promise) {
+        try {
+            nativePause()
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("PAUSE_ERROR", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun resume(promise: Promise) {
+        try {
+            nativeResume()
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("RESUME_ERROR", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun isPaused(promise: Promise) {
+        try {
+            val paused = nativeIsPaused()
+            promise.resolve(paused)
+        } catch (e: Exception) {
+            promise.reject("STATE_ERROR", e.message, e)
+        }
+    }
+
+    @ReactMethod
     fun getThreadCount(promise: Promise) {
         try {
             val count = nativeGetThreadCount()
@@ -109,6 +139,9 @@ class ThreadForgeModule(reactContext: ReactApplicationContext) :
     private external fun nativeInitialize(threadCount: Int)
     private external fun nativeExecuteTask(taskId: String, priority: Int, taskData: String): String
     private external fun nativeCancelTask(taskId: String): Boolean
+    private external fun nativePause()
+    private external fun nativeResume()
+    private external fun nativeIsPaused(): Boolean
     private external fun nativeGetThreadCount(): Int
     private external fun nativeGetPendingTaskCount(): Int
     private external fun nativeGetActiveTaskCount(): Int

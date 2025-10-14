@@ -2,7 +2,20 @@ import { NativeModules } from 'react-native';
 
 type Primitive = string | number | boolean | undefined;
 
-const { ThreadForge } = NativeModules;
+type NativeThreadForgeModule = {
+  initialize(threadCount: number): Promise<boolean>;
+  executeTask(taskId: string, priority: number, payload: string): Promise<string>;
+  cancelTask(taskId: string): Promise<boolean>;
+  pause(): Promise<boolean>;
+  resume(): Promise<boolean>;
+  isPaused(): Promise<boolean>;
+  getThreadCount(): Promise<number>;
+  getPendingTaskCount(): Promise<number>;
+  getActiveTaskCount(): Promise<number>;
+  shutdown(): Promise<boolean>;
+};
+
+const { ThreadForge } = NativeModules as { ThreadForge: NativeThreadForgeModule };
 
 export enum TaskPriority {
   LOW = 0,
@@ -49,6 +62,26 @@ class ThreadForgeEngine {
     this.ensureInitialized();
     const taskPayload = serializeTaskDescriptor(descriptor);
     return ThreadForge.executeTask(taskId, priority, taskPayload);
+  }
+
+  async cancelTask(taskId: string) {
+    this.ensureInitialized();
+    return ThreadForge.cancelTask(taskId);
+  }
+
+  async pause() {
+    this.ensureInitialized();
+    await ThreadForge.pause();
+  }
+
+  async resume() {
+    this.ensureInitialized();
+    await ThreadForge.resume();
+  }
+
+  async isPaused() {
+    this.ensureInitialized();
+    return ThreadForge.isPaused();
   }
 
   async runParallelTasks(tasks: ThreadForgeScheduledTask[]) {

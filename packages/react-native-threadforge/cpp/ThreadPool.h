@@ -49,14 +49,17 @@ class ThreadPool {
 public:
     explicit ThreadPool(size_t numThreads = 4);
     ~ThreadPool();
-    
+
     std::string submitTask(const std::string& taskId, TaskPriority priority, std::function<std::string()> task);
     bool cancelTask(const std::string& taskId);
-    
+    void pause();
+    void resume();
+    bool isPaused() const;
+
     size_t getThreadCount() const;
     size_t getPendingTaskCount() const;
     size_t getActiveTaskCount() const;
-    
+
     void shutdown();
     
 private:
@@ -69,6 +72,7 @@ private:
     mutable std::mutex queueMutex;
     std::condition_variable condition;
     std::atomic<bool> stop{false};
+    std::atomic<bool> paused{false};
     std::atomic<size_t> pendingTasks{0};
     std::atomic<size_t> activeTasks{0};
     std::atomic<uint64_t> sequenceCounter{0};

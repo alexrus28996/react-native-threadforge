@@ -19,7 +19,7 @@ void ThreadPool::workerThread() {
         {
             std::unique_lock<std::mutex> lock(queueMutex);
             condition.wait(lock, [this] {
-                return stop || !tasks.empty();
+                return stop || (!paused && !tasks.empty());
             });
 
             if (stop && tasks.empty()) {
@@ -127,6 +127,23 @@ bool ThreadPool::cancelTask(const std::string& taskId) {
     return true;
 }
 
+void ThreadPool::pause() {
+    std::lock_guard<std::mutex> lock(queueMutex);
+    paused = true;
+}
+
+void ThreadPool::resume() {
+    {
+        std::lock_guard<std::mutex> lock(queueMutex);
+        paused = false;
+    }
+    condition.notify_all();
+}
+
+bool ThreadPool::isPaused() const {
+    return paused.load();
+}
+
 size_t ThreadPool::getThreadCount() const {
     return workers.size();
 }
@@ -143,6 +160,7 @@ void ThreadPool::shutdown() {
     {
         std::unique_lock<std::mutex> lock(queueMutex);
         stop = true;
+        paused = false;
     }
 
     condition.notify_all();

@@ -9,154 +9,198 @@ import {
   View,
   Alert,
 } from 'react-native';
-import { threadForge, TaskPriority } from './packages/react-native-threadforge/src/index';
+import {
+  threadForge,
+  ThreadForgeTaskDescriptor,
+  ThreadForgeScheduledTask,
+  TaskPriority,
+} from './packages/react-native-threadforge/src/index';
 
 function App(): JSX.Element {
   const [stats, setStats] = useState({ threadCount: 0, pendingTasks: 0, activeTasks: 0 });
   const [results, setResults] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [uiCounter, setUiCounter] = useState(0);
+  const [paused, setPaused] = useState(false);
   const counterRef = useRef<NodeJS.Timeout | null>(null);
+  const statsRef = useRef<NodeJS.Timeout | null>(null);
 
+  /** Initialize ThreadForge + start foreground counter */
   useEffect(() => {
-    const init = async () => {
+    (async () => {
       try {
         await threadForge.initialize(4);
-        await updateStats();
         console.log('✅ ThreadForge initialized with 4 threads');
-      } catch (error) {
-        Alert.alert('Error', 'Failed to initialize ThreadForge: ' + error);
+        await updateStats();
+      } catch (err) {
+        Alert.alert('Error', 'Failed to initialize ThreadForge: ' + err);
       }
-    };
+    })();
 
-    init();
+    // Foreground UI counter (proof UI thread stays alive)
+    counterRef.current = setInterval(() => setUiCounter((v) => (v + 1) % 10000), 200);
 
-    // Foreground UI counter (to prove UI remains responsive)
-    counterRef.current = setInterval(() => setUiCounter((c) => (c + 1) % 1000), 200);
+    // Live stats update every second
+    statsRef.current = setInterval(updateStats, 1000);
 
     return () => {
-      if (counterRef.current) {
-        clearInterval(counterRef.current);
-      }
-      threadForge
-        .shutdown()
-        .then(() => console.log('🧵 ThreadForge shutdown cleanly'))
-        .catch((error) => console.warn('ThreadForge shutdown error', error));
+      if (counterRef.current) clearInterval(counterRef.current);
+      if (statsRef.current) clearInterval(statsRef.current);
+      threadForge.shutdown();
+      console.log('🧹 ThreadForge shutdown cleanly');
     };
   }, []);
 
   const updateStats = async () => {
-    const currentStats = await threadForge.getStats();
-    setStats(currentStats);
+    try {
+      const s = await threadForge.getStats();
+      setStats(s);
+    } catch {}
   };
 
-  const runOneMinuteTask = async () => {
-    setLoading(true);
-    const start = Date.now();
+  const logResult = (text: string) => {
+    setResults((prev) => [text, ...prev].slice(0, 15));
+  };
 
+  // ===================== TASK TYPES =====================
+  const runHeavyLoop = async () => {
+    setLoading(true);
     try {
-      const result = await threadForge.runTask(
-        `minute-task-${Date.now()}`,
-        {
-          type: 'TIMED_LOOP',
-          durationMs: 60 * 1000,
-        },
+      const res = await threadForge.runTask(
+        `heavy-${Date.now()}`,
+        { type: 'HEAVY_LOOP', iterations: 5_000_000 },
         TaskPriority.NORMAL,
       );
-
-      const elapsed = ((Date.now() - start) / 1000).toFixed(1);
-      logResult(`✅ Long Task Completed (${elapsed}s): ${result}`);
-    } catch (err) {
-      logResult(`❌ Error: ${err}`);
+      logResult(`✅ Heavy Loop: ${res}`);
+    } catch (e) {
+      logResult(`❌ ${e}`);
     } finally {
-      await updateStats();
       setLoading(false);
     }
   };
 
-
-  const logResult = (message: string) => {
-    setResults((prev) => [message, ...prev].slice(0, 15));
-  };
-
-  const runBackgroundHeavyTask = async () => {
+  const runTimedLoop = async () => {
     setLoading(true);
     const start = Date.now();
     try {
-      const result = await threadForge.runTask(
-        `bg-task-${Date.now()}`,
-        {
-          type: 'HEAVY_LOOP',
-          iterations: 10_000_000,
-        },
-        TaskPriority.NORMAL
+      const res = await threadForge.runTask(
+        `timed-${Date.now()}`,
+        { type: 'TIMED_LOOP', durationMs: 60_000 },
+        TaskPriority.NORMAL,
       );
-
-      const elapsed = ((Date.now() - start) / 1000).toFixed(2);
-      logResult(`✅ Background Task Result: ${result} (⏱ ${elapsed}s)`);
-    } catch (err) {
-      logResult(`❌ Error: ${err}`);
+      const elapsed = ((Date.now() - start) / 1000).toFixed(1);
+      logResult(`✅ Timed Loop (1min) done in ${elapsed}s: ${res}`);
+    } catch (e) {
+      logResult(`❌ ${e}`);
     } finally {
-      await updateStats();
       setLoading(false);
     }
   };
 
-  const runMixedLoadTest = async () => {
+  const runMixedLoop = async () => {
     setLoading(true);
-    const start = Date.now();
     try {
-      const tasks = Array.from({ length: 4 }, (_, i) => ({
-        id: `mix-${Date.now()}-${i}`,
-        descriptor: {
-          type: 'MIXED_LOOP',
-          iterations: 7_000_000,
-          offset: i,
-        },
-        priority: TaskPriority.NORMAL,
+      const res = await threadForge.runTask(
+        `mix-${Date.now()}`,
+        { type: 'MIXED_LOOP', iterations: 3_000_000, offset: 200 },
+        TaskPriority.HIGH,
+      );
+      logResult(`⚙️ Mixed Loop: ${res}`);
+    } catch (e) {
+      logResult(`❌ ${e}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const runInstantMessage = async () => {
+    try {
+      const res = await threadForge.runTask(
+        `msg-${Date.now()}`,
+        { type: 'INSTANT_MESSAGE', message: 'Hello from foreground!' },
+        TaskPriority.LOW,
+      );
+      logResult(`💬 ${res}`);
+    } catch (e) {
+      logResult(`❌ ${e}`);
+    }
+  };
+
+  const runParallelTasks = async () => {
+    setLoading(true);
+    try {
+      const tasks: ThreadForgeScheduledTask[] = Array.from({ length: 4 }, (_, i) => ({
+        id: `parallel-${Date.now()}-${i}`,
+        descriptor: { type: 'HEAVY_LOOP', iterations: 2_000_000 + i * 500_000 },
+        priority: i === 0 ? TaskPriority.HIGH : TaskPriority.NORMAL,
       }));
 
-      const taskResults = await threadForge.runParallelTasks(tasks);
-      const elapsed = ((Date.now() - start) / 1000).toFixed(2);
-      logResult(`🔥 Parallel Tasks Finished (${elapsed}s):\n${taskResults.join('\n')}`);
-    } catch (err) {
-      logResult(`❌ Error: ${err}`);
+      const res = await threadForge.runParallelTasks(tasks);
+      logResult(`🔥 Parallel tasks completed:\n${res.join('\n')}`);
+    } catch (e) {
+      logResult(`❌ ${e}`);
     } finally {
-      await updateStats();
       setLoading(false);
     }
   };
 
-  const runHighPriorityTest = async () => {
-    setLoading(true);
+  // ===================== CONTROL =====================
+  const cancelExampleTask = async () => {
     try {
-      const result = await threadForge.runTask(
-        `hp-${Date.now()}`,
-        {
-          type: 'INSTANT_MESSAGE',
-          message: '🚀 High-priority task executed instantly!',
-        },
-        TaskPriority.HIGH
+      const id = 'cancel-test';
+      logResult('🚧 Scheduling cancellable task...');
+      const p = threadForge.runTask(
+        id,
+        { type: 'HEAVY_LOOP', iterations: 100_000_000 },
+        TaskPriority.NORMAL,
       );
-      logResult(result);
-    } catch (err) {
-      logResult(`❌ Error: ${err}`);
-    } finally {
-      await updateStats();
-      setLoading(false);
+      setTimeout(async () => {
+        await threadForge.cancelTask(id);
+        logResult('🛑 Task cancelled!');
+      }, 2000);
+      await p;
+    } catch (e) {
+      logResult(`❌ ${e}`);
     }
   };
 
+  const togglePauseResume = async () => {
+    try {
+      if (paused) {
+        await threadForge.resume();
+        logResult('▶️ Resumed');
+      } else {
+        await threadForge.pause();
+        logResult('⏸️ Paused');
+      }
+      setPaused(!paused);
+    } catch (e) {
+      logResult(`❌ ${e}`);
+    }
+  };
+
+  const checkPauseState = async () => {
+    try {
+      const state = await threadForge.isPaused();
+      logResult(`🔍 Is Paused: ${state}`);
+    } catch (e) {
+      logResult(`❌ ${e}`);
+    }
+  };
+
+  // ===================== RENDER =====================
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
-          <Text style={styles.title}>⚡ ThreadForge Test</Text>
-          <Text style={styles.subtitle}>Background & Foreground Concurrency Check</Text>
+          <Text style={styles.title}>⚡ ThreadForge</Text>
+          <Text style={styles.subtitle}>JSI-Based Multithreading Playground</Text>
         </View>
 
+        {/* Live Stats */}
         <View style={styles.statsCard}>
+          <Text style={styles.statsTitle}>📊 Engine Stats</Text>
           <View style={styles.statRow}>
             <Text style={styles.statLabel}>🧵 Threads:</Text>
             <Text style={styles.statValue}>{stats.threadCount}</Text>
@@ -171,44 +215,44 @@ function App(): JSX.Element {
           </View>
           <View style={styles.statRow}>
             <Text style={styles.statLabel}>🎡 UI Counter:</Text>
-            <Text style={[styles.statValue, styles.statValueHighlight]}>{uiCounter}</Text>
+            <Text style={[styles.statValue, { color: '#FF9B00' }]}>{uiCounter}</Text>
           </View>
         </View>
 
+        {/* Buttons */}
         <View style={styles.buttonContainer}>
-          <TouchableOpacity
-            style={[styles.button, styles.buttonPrimary]}
-            onPress={runBackgroundHeavyTask}
-            disabled={loading}>
-            <Text style={styles.buttonText}>
-              {loading ? '⏳ Running...' : '🧮 Run Heavy Background Task'}
-            </Text>
+          <Text style={styles.sectionTitle}>🧮 Task Tests</Text>
+          <TouchableOpacity style={[styles.button, styles.primary]} onPress={runHeavyLoop} disabled={loading}>
+            <Text style={styles.buttonText}>Run Heavy Loop</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.button, styles.danger]} onPress={runTimedLoop} disabled={loading}>
+            <Text style={styles.buttonText}>Run 1-Minute Task</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.button, styles.success]} onPress={runMixedLoop} disabled={loading}>
+            <Text style={styles.buttonText}>Run Mixed Loop</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.button, styles.secondary]} onPress={runInstantMessage}>
+            <Text style={styles.buttonText}>Run Instant Message</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.button, styles.warning]} onPress={runParallelTasks} disabled={loading}>
+            <Text style={styles.buttonText}>Run Parallel Tasks</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.button, styles.buttonSuccess]}
-            onPress={runMixedLoadTest}
-            disabled={loading}>
-            <Text style={styles.buttonText}>🔥 Run Parallel Load Test</Text>
+          <Text style={styles.sectionTitle}>🧭 Controls</Text>
+          <TouchableOpacity style={[styles.button, styles.info]} onPress={cancelExampleTask}>
+            <Text style={styles.buttonText}>Cancel Example Task</Text>
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.button, styles.buttonWarning]}
-            onPress={runHighPriorityTest}
-           >
-            <Text style={styles.buttonText}>⚡ High Priority Task</Text>
+          <TouchableOpacity style={[styles.button, styles.primary]} onPress={togglePauseResume}>
+            <Text style={styles.buttonText}>{paused ? '▶️ Resume' : '⏸️ Pause'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.button, styles.buttonPrimary]}
-            onPress={runOneMinuteTask}
-            >
-            <Text style={styles.buttonText}>🕐 1-Minute Heavy Task</Text>
+          <TouchableOpacity style={[styles.button, styles.info]} onPress={checkPauseState}>
+            <Text style={styles.buttonText}>Check Pause State</Text>
           </TouchableOpacity>
-
         </View>
 
+        {/* Results */}
         <View style={styles.resultsCard}>
-          <Text style={styles.resultsTitle}>📊 Task Results</Text>
+          <Text style={styles.resultsTitle}>📜 Results</Text>
           {results.length === 0 ? (
             <Text style={styles.noResults}>No tasks executed yet.</Text>
           ) : (
@@ -229,7 +273,7 @@ const styles = StyleSheet.create({
   scrollContent: { padding: 20 },
   header: { alignItems: 'center', marginBottom: 24, marginTop: 20 },
   title: { fontSize: 32, color: '#00D9FF', fontWeight: 'bold' },
-  subtitle: { fontSize: 14, color: '#8B92B0', textAlign: 'center', marginTop: 4 },
+  subtitle: { fontSize: 14, color: '#8B92B0' },
   statsCard: {
     backgroundColor: '#1A1F3A',
     borderRadius: 16,
@@ -238,20 +282,19 @@ const styles = StyleSheet.create({
     borderColor: '#2A3052',
     borderWidth: 1,
   },
-  statRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
+  statsTitle: { fontSize: 18, fontWeight: '700', color: '#00D9FF', marginBottom: 10 },
+  statRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5 },
   statLabel: { color: '#8B92B0', fontSize: 15 },
   statValue: { color: '#00D9FF', fontSize: 16, fontWeight: 'bold' },
-  statValueHighlight: { color: '#FF9B00' },
+  sectionTitle: { color: '#8B92B0', marginTop: 10, marginBottom: 6, fontWeight: '600' },
   buttonContainer: { marginBottom: 20 },
-  button: {
-    padding: 14,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginVertical: 6,
-  },
-  buttonPrimary: { backgroundColor: '#00D9FF' },
-  buttonSuccess: { backgroundColor: '#4CAF50' },
-  buttonWarning: { backgroundColor: '#FF6B35' },
+  button: { padding: 14, borderRadius: 10, alignItems: 'center', marginVertical: 5 },
+  primary: { backgroundColor: '#00D9FF' },
+  secondary: { backgroundColor: '#2A3052' },
+  success: { backgroundColor: '#4CAF50' },
+  danger: { backgroundColor: '#E53935' },
+  warning: { backgroundColor: '#FF9800' },
+  info: { backgroundColor: '#6C63FF' },
   buttonText: { color: '#FFF', fontSize: 15, fontWeight: '600' },
   resultsCard: {
     backgroundColor: '#1A1F3A',

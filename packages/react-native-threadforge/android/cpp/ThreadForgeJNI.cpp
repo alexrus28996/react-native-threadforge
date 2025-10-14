@@ -222,4 +222,26 @@ Java_com_threadforge_ThreadForgeModule_nativeGetActiveTaskCount(JNIEnv* env, job
     return g_threadPool ? static_cast<jint>(g_threadPool->getActiveTaskCount()) : 0;
 }
 
+JNIEXPORT void JNICALL
+Java_com_threadforge_ThreadForgeModule_nativePause(JNIEnv* env, jobject) {
+    if (g_threadPool) {
+        g_threadPool->pause();
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_threadforge_ThreadForgeModule_nativeResume(JNIEnv* env, jobject) {
+    if (g_threadPool) {
+        g_threadPool->resume();
+    }
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_threadforge_ThreadForgeModule_nativeIsPaused(JNIEnv* env, jobject) {
+    if (!g_threadPool) {
+        return JNI_FALSE;
+    }
+    return g_threadPool->isPaused() ? JNI_TRUE : JNI_FALSE;
+}
+
 } // extern "C"
