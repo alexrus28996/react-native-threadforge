@@ -9,6 +9,7 @@ add_library(
     react-native-threadforge
     SHARED
     ../cpp/ThreadPool.cpp
+    ../cpp/TaskUtils.cpp
     cpp/ThreadForgeJNI.cpp
 )
 

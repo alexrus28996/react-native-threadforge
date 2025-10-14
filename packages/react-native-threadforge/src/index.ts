@@ -35,13 +35,14 @@ export type ThreadForgeScheduledTask = {
   priority?: TaskPriority;
 };
 
-const serializeTaskDescriptor = (descriptor: ThreadForgeTaskDescriptor) => {
+const serializeTaskDescriptor = (descriptor: ThreadForgeTaskDescriptor): string => {
   const { type, ...rest } = descriptor as Record<string, Primitive>;
+  const typeLabel = String(type);
   const encoded = Object.entries(rest)
     .filter(([, value]) => value !== undefined)
     .map(([key, value]) => `${key}=${value}`)
     .join('|');
-  return encoded ? `${type}|${encoded}` : type;
+  return encoded ? `${typeLabel}|${encoded}` : typeLabel;
 };
 
 class ThreadForgeEngine {

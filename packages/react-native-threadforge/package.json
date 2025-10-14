@@ -4,6 +4,14 @@
   "description": "High-performance multithreading library for React Native using JNI",
   "main": "src/index.ts",
   "types": "src/index.ts",
+  "files": [
+    "android",
+    "ios",
+    "cpp",
+    "src",
+    "react-native-threadforge.podspec",
+    "README.md"
+  ],
   "scripts": {
     "test": "echo \"No tests yet\"",
     "lint": "eslint .",
