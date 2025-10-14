@@ -13,10 +13,11 @@ namespace threadforge {
 struct TaskDescriptor {
     std::string type;
     std::unordered_map<std::string, std::string> params;
+    nlohmann::json json;
 };
 
 TaskDescriptor parseTaskData(const std::string& taskData);
-std::function<std::string()> createTaskFunction(const TaskDescriptor& descriptor);
+TaskFunction createTaskFunction(const TaskDescriptor& descriptor);
 TaskPriority toTaskPriority(int priority);
 
 } // namespace threadforge

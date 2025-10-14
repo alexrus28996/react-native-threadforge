@@ -32,17 +32,44 @@ import { threadForge, TaskPriority } from 'react-native-threadforge';
 async function bootstrap() {
   await threadForge.initialize(4);
 
-  const result = await threadForge.runTask('heavy-task', {
+  const subscription = threadForge.on('progress', ({ taskId, progress }) => {
+    console.log(`[${taskId}] progress`, Math.round(progress * 100));
+  });
+
+  const result = await threadForge.runTask({
     type: 'HEAVY_LOOP',
     iterations: 500_000,
-  }, TaskPriority.HIGH);
+  }, { priority: TaskPriority.HIGH });
 
   console.log(result);
+  subscription.remove();
 }
+
+bootstrap();
 ```
 
-Task descriptors are now serialized using JSON under the hood. This means you can pass native
-JavaScript objects directly to the `runTask` helper and the native layer will validate and parse the
-payload, while still accepting legacy string-encoded descriptors for backwards compatibility.
+You can also register bespoke workloads that run entirely inside the native thread pool by providing
+a declarative descriptor:
+
+```ts
+await threadForge.registerTask('matrixPipeline', {
+  steps: [
+    { type: 'HEAVY_LOOP', iterations: { fromPayload: 'warmupIterations', default: 100_000 } },
+    { type: 'TIMED_LOOP', durationMs: { fromPayload: 'durationMs', default: 500 } },
+    { type: 'INSTANT_MESSAGE', message: 'All phases complete' },
+  ],
+});
+
+const summary = await threadForge.runTask('matrixPipeline', {
+  warmupIterations: 250_000,
+  durationMs: 750,
+});
+
+console.log(JSON.parse(summary));
+```
+
+The native layer validates every descriptor using JSON and provides detailed error messages when a
+payload does not match the expected schema. Legacy pipe-delimited descriptors remain supported for
+backwards compatibility.
 
 Refer to the sample application in this repository for more advanced usage examples.
