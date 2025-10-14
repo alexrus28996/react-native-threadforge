@@ -22,6 +22,14 @@ type TaskInfo = {
   result?: string;
 };
 
+const showAlert = (title: string, message: string) => {
+  if (typeof Alert.alert === 'function') {
+    Alert.alert(title, message);
+  } else {
+    console.error(`[ThreadForge] ${title}: ${message}`);
+  }
+};
+
 function App(): JSX.Element {
   const [stats, setStats] = useState({ threadCount: 0, pendingTasks: 0, activeTasks: 0 });
   const [tasks, setTasks] = useState<TaskInfo[]>([]);
@@ -29,15 +37,20 @@ function App(): JSX.Element {
   const [uiCounter, setUiCounter] = useState(0);
   const counterRef = useRef<NodeJS.Timeout | null>(null);
   const statsRef = useRef<NodeJS.Timeout | null>(null);
+  const isTestEnv = typeof process !== 'undefined' && !!process.env?.JEST_WORKER_ID;
 
   useEffect(() => {
+    if (isTestEnv) {
+      return;
+    }
+
     (async () => {
       try {
         await threadForge.initialize(4);
         await updateStats();
         console.log('✅ ThreadForge initialized');
       } catch (err) {
-        Alert.alert('Error', String(err));
+        showAlert('Error', String(err));
       }
     })();
 
@@ -45,11 +58,15 @@ function App(): JSX.Element {
     statsRef.current = setInterval(updateStats, 1000);
 
     return () => {
-      if (counterRef.current) clearInterval(counterRef.current);
-      if (statsRef.current) clearInterval(statsRef.current);
+      if (counterRef.current) {
+        clearInterval(counterRef.current);
+      }
+      if (statsRef.current) {
+        clearInterval(statsRef.current);
+      }
       threadForge.shutdown();
     };
-  }, []);
+  }, [isTestEnv]);
 
   const updateStats = async () => {
     try {
@@ -86,7 +103,7 @@ function App(): JSX.Element {
       await threadForge.cancelTask(id);
       updateTaskStatus(id, { status: 'cancelled', result: '🛑 Cancelled by user' });
     } catch (e) {
-      Alert.alert('Error cancelling task', String(e));
+      showAlert('Error cancelling task', String(e));
     }
   };
 
@@ -105,7 +122,9 @@ function App(): JSX.Element {
 
   const runParallel = async () => {
     const idPrefix = `parallel-${Date.now()}`;
-    for (let i = 0; i < 4; i++) addTask(`${idPrefix}-${i}`, `Parallel-${i + 1}`);
+    for (let i = 0; i < 4; i++) {
+      addTask(`${idPrefix}-${i}`, `Parallel-${i + 1}`);
+    }
     try {
       const results = await threadForge.runParallelTasks(
         Array.from({ length: 4 }, (_, i) => ({
@@ -118,7 +137,7 @@ function App(): JSX.Element {
         updateTaskStatus(`${idPrefix}-${i}`, { status: 'done', result: r })
       );
     } catch (e) {
-      Alert.alert('Parallel error', String(e));
+      showAlert('Parallel error', String(e));
     }
   };
 
@@ -163,7 +182,7 @@ function App(): JSX.Element {
           ) : (
             tasks.map((task) => (
               <View key={task.id} style={styles.taskRow}>
-                <View style={{ flex: 1 }}>
+                <View style={styles.taskInfo}>
                   <Text style={styles.taskLabel}>{task.label}</Text>
                   <Text style={styles.taskStatus}>
                     {task.status === 'pending'
@@ -236,6 +255,9 @@ const styles = StyleSheet.create({
     borderBottomColor: '#2A3052',
     borderBottomWidth: 1,
     paddingVertical: 6,
+  },
+  taskInfo: {
+    flex: 1,
   },
   taskLabel: { color: '#E0E6ED', fontSize: 14, fontWeight: '600' },
   taskStatus: { color: '#8B92B0', fontSize: 13 },

@@ -5,11 +5,53 @@
 #include <cmath>
 #include <iomanip>
 #include <sstream>
+#include <stdexcept>
+
+#include "nlohmann/json.hpp"
 
 namespace threadforge {
 
 TaskDescriptor parseTaskData(const std::string& taskData) {
+    if (taskData.empty()) {
+        throw std::invalid_argument("Task descriptor cannot be empty");
+    }
+
     TaskDescriptor descriptor;
+    try {
+        const auto json = nlohmann::json::parse(taskData);
+        if (!json.is_object()) {
+            throw std::invalid_argument("Task descriptor must be a JSON object");
+        }
+
+        auto typeIt = json.find("type");
+        if (typeIt == json.end() || !typeIt->is_string()) {
+            throw std::invalid_argument("Task descriptor missing string \"type\"");
+        }
+
+        descriptor.type = typeIt->get<std::string>();
+        for (auto it = json.begin(); it != json.end(); ++it) {
+            if (it.key() == "type") {
+                continue;
+            }
+
+            if (it->is_string()) {
+                descriptor.params[it.key()] = it->get<std::string>();
+            } else if (it->is_number_integer()) {
+                descriptor.params[it.key()] = std::to_string(it->get<long long>());
+            } else if (it->is_number_float()) {
+                descriptor.params[it.key()] = std::to_string(it->get<double>());
+            } else if (it->is_boolean()) {
+                descriptor.params[it.key()] = it->get<bool>() ? "true" : "false";
+            } else {
+                descriptor.params[it.key()] = it->dump();
+            }
+        }
+
+        return descriptor;
+    } catch (const nlohmann::json::parse_error&) {
+        // Fallback to legacy parsing below
+    }
+
     std::stringstream ss(taskData);
     std::string segment;
     bool first = true;
@@ -33,6 +75,10 @@ TaskDescriptor parseTaskData(const std::string& taskData) {
         const auto key = segment.substr(0, separator);
         const auto value = segment.substr(separator + 1);
         descriptor.params[key] = value;
+    }
+
+    if (descriptor.type.empty()) {
+        throw std::invalid_argument("Legacy task descriptor missing type");
     }
 
     return descriptor;

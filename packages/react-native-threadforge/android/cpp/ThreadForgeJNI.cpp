@@ -48,10 +48,17 @@ Java_com_threadforge_ThreadForgeModule_nativeExecuteTask(JNIEnv* env, jobject, j
     env->ReleaseStringUTFChars(taskId, taskIdChars);
     env->ReleaseStringUTFChars(taskData, taskDataChars);
 
-    const auto descriptor = parseTaskData(taskDataStr);
-    auto work = createTaskFunction(descriptor);
+    std::string result;
+    try {
+        const auto descriptor = parseTaskData(taskDataStr);
+        auto work = createTaskFunction(descriptor);
+        result = g_threadPool->submitTask(taskIdStr, toTaskPriority(priority), std::move(work));
+    } catch (const std::exception& ex) {
+        result = std::string("Task error: ") + ex.what();
+    } catch (...) {
+        result = "Task error: unknown exception";
+    }
 
-    const auto result = g_threadPool->submitTask(taskIdStr, toTaskPriority(priority), std::move(work));
     return env->NewStringUTF(result.c_str());
 }
 

@@ -4,6 +4,8 @@
 #include <string>
 #include <unordered_map>
 
+#include "nlohmann/json.hpp"
+
 #include "ThreadPool.h"
 
 namespace threadforge {
