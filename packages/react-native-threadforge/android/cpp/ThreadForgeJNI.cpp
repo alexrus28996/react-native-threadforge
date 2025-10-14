@@ -1,4 +1,4 @@
-// Author: Abhishek Kumar
+// Author: Abhishek Kumar <alexrus28996@gmail.com>
 #include <jni.h>
 
 #include <algorithm>

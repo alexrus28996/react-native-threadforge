@@ -91,4 +91,11 @@ describe('threadForge', () => {
     expect(handler).toHaveBeenCalledWith({ taskId: 'abc', progress: 0.5 });
     subscription.remove();
   });
+
+  it('records package metadata for npm distribution', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const pkg = require('../package.json');
+    expect(pkg.version).toBe('1.0.0');
+    expect(pkg.author).toBe('Abhishek Kumar (alexrus28996)');
+  });
 });

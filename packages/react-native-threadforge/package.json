@@ -1,7 +1,7 @@
 {
   "name": "react-native-threadforge",
   "version": "1.0.0",
-  "description": "High-performance multithreading library for React Native using JNI",
+  "description": "Handcrafted multithreading toolkit for React Native backed by a native C++ worker pool",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "files": [
@@ -10,7 +10,8 @@
     "cpp",
     "src",
     "react-native-threadforge.podspec",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "test": "echo \"No tests yet\"",
@@ -26,7 +27,7 @@
     "threadpool",
     "performance"
   ],
-  "author": "Abhishek Kumar",
+  "author": "Abhishek Kumar (alexrus28996)",
   "license": "MIT",
   "peerDependencies": {
     "react": "*",

@@ -1,9 +1,10 @@
 # React Native ThreadForge
 
-> **Author:** Abhishek Kumar
+> **Author:** Abhishek Kumar (alexrus28996)
 
 ThreadForge brings a modern, native C++ thread pool to React Native so you can offload CPU intensive
-work without blocking the JavaScript bridge. The library now ships with JSON task descriptors,
+work without blocking the JavaScript bridge. The library is handcrafted and maintained by Abhishek
+Kumar and now ships with JSON task descriptors,
 a dynamic native registry for custom pipelines, built-in progress events (throttled natively on both
 Android and iOS), and full support for the latest React Native releases.
 
@@ -214,4 +215,4 @@ npm run test
 
 ## License
 
-ThreadForge is released under the MIT License.
+ThreadForge is released under the MIT License and lovingly maintained by Abhishek Kumar (alexrus28996).

@@ -1,4 +1,4 @@
-// Author: Abhishek Kumar
+// Author: Abhishek Kumar <alexrus28996@gmail.com>
 #import "ThreadForge.h"
 
 #import <algorithm>

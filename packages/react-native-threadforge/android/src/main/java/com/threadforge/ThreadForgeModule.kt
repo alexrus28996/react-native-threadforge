@@ -1,4 +1,4 @@
-// Author: Abhishek Kumar
+// Author: Abhishek Kumar <alexrus28996@gmail.com>
 package com.threadforge
 
 import com.facebook.react.bridge.Arguments

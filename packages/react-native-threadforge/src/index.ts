@@ -1,4 +1,4 @@
-// Author: Abhishek Kumar
+// Author: Abhishek Kumar <alexrus28996@gmail.com>
 import { NativeEventEmitter, NativeModules, type EmitterSubscription } from 'react-native';
 
 type NativeThreadForgeModule = {
