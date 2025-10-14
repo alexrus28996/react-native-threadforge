@@ -19,21 +19,29 @@ function App(): JSX.Element {
   const counterRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    try {
-      threadForge.initialize(4);
-      updateStats();
-      console.log('✅ ThreadForge initialized with 4 threads');
-    } catch (error) {
-      Alert.alert('Error', 'Failed to initialize ThreadForge: ' + error);
-    }
+    const init = async () => {
+      try {
+        await threadForge.initialize(4);
+        await updateStats();
+        console.log('✅ ThreadForge initialized with 4 threads');
+      } catch (error) {
+        Alert.alert('Error', 'Failed to initialize ThreadForge: ' + error);
+      }
+    };
+
+    init();
 
     // Foreground UI counter (to prove UI remains responsive)
     counterRef.current = setInterval(() => setUiCounter((c) => (c + 1) % 1000), 200);
 
     return () => {
-      if (counterRef.current) clearInterval(counterRef.current);
-      threadForge.shutdown();
-      console.log('🧵 ThreadForge shutdown cleanly');
+      if (counterRef.current) {
+        clearInterval(counterRef.current);
+      }
+      threadForge
+        .shutdown()
+        .then(() => console.log('🧵 ThreadForge shutdown cleanly'))
+        .catch((error) => console.warn('ThreadForge shutdown error', error));
     };
   }, []);
 
@@ -42,30 +50,18 @@ function App(): JSX.Element {
     setStats(currentStats);
   };
 
-    const runOneMinuteTask = async () => {
+  const runOneMinuteTask = async () => {
     setLoading(true);
     const start = Date.now();
 
     try {
       const result = await threadForge.runTask(
         `minute-task-${Date.now()}`,
-        () => {
-          // Simulate ~1 minute heavy background processing
-          const endTime = Date.now() + 60 * 1000; // 60 seconds
-          let iteration = 0;
-          let sum = 0;
-
-          while (Date.now() < endTime) {
-            // CPU work simulation (to keep thread busy)
-            sum += Math.sqrt(iteration % 10000);
-            iteration++;
-          }
-
-          return `🕐 Task finished in ~${((Date.now() - (endTime - 60000)) / 1000).toFixed(
-            1
-          )}s | Iterations: ${iteration.toLocaleString()} | Sum: ${sum.toFixed(2)}`;
+        {
+          type: 'TIMED_LOOP',
+          durationMs: 60 * 1000,
         },
-        TaskPriority.NORMAL
+        TaskPriority.NORMAL,
       );
 
       const elapsed = ((Date.now() - start) / 1000).toFixed(1);
@@ -89,10 +85,9 @@ function App(): JSX.Element {
     try {
       const result = await threadForge.runTask(
         `bg-task-${Date.now()}`,
-        () => {
-          let total = 0;
-          for (let i = 0; i < 10000000; i++) total += Math.sqrt(i);
-          return total.toFixed(2);
+        {
+          type: 'HEAVY_LOOP',
+          iterations: 10_000_000,
         },
         TaskPriority.NORMAL
       );
@@ -113,16 +108,17 @@ function App(): JSX.Element {
     try {
       const tasks = Array.from({ length: 4 }, (_, i) => ({
         id: `mix-${Date.now()}-${i}`,
-        task: () => {
-          let result = 0;
-          for (let j = 0; j < 7000000; j++) result += Math.sqrt(j + i);
-          return `Task ${i + 1}: Done (${result.toFixed(0)})`;
+        descriptor: {
+          type: 'MIXED_LOOP',
+          iterations: 7_000_000,
+          offset: i,
         },
+        priority: TaskPriority.NORMAL,
       }));
 
-      const results = await threadForge.runParallelTasks(tasks);
+      const taskResults = await threadForge.runParallelTasks(tasks);
       const elapsed = ((Date.now() - start) / 1000).toFixed(2);
-      logResult(`🔥 Parallel Tasks Finished (${elapsed}s):\n${results.join('\n')}`);
+      logResult(`🔥 Parallel Tasks Finished (${elapsed}s):\n${taskResults.join('\n')}`);
     } catch (err) {
       logResult(`❌ Error: ${err}`);
     } finally {
@@ -136,8 +132,9 @@ function App(): JSX.Element {
     try {
       const result = await threadForge.runTask(
         `hp-${Date.now()}`,
-        () => {
-          return '🚀 High-priority task executed instantly!';
+        {
+          type: 'INSTANT_MESSAGE',
+          message: '🚀 High-priority task executed instantly!',
         },
         TaskPriority.HIGH
       );
@@ -174,7 +171,7 @@ function App(): JSX.Element {
           </View>
           <View style={styles.statRow}>
             <Text style={styles.statLabel}>🎡 UI Counter:</Text>
-            <Text style={[styles.statValue, { color: '#FF9B00' }]}>{uiCounter}</Text>
+            <Text style={[styles.statValue, styles.statValueHighlight]}>{uiCounter}</Text>
           </View>
         </View>
 
@@ -202,11 +199,11 @@ function App(): JSX.Element {
             <Text style={styles.buttonText}>⚡ High Priority Task</Text>
           </TouchableOpacity>
           <TouchableOpacity
-  style={[styles.button, styles.buttonPrimary]}
-  onPress={runOneMinuteTask}
-  disabled={loading}>
-  <Text style={styles.buttonText}>🕐 1-Minute Heavy Task</Text>
-</TouchableOpacity>
+            style={[styles.button, styles.buttonPrimary]}
+            onPress={runOneMinuteTask}
+            disabled={loading}>
+            <Text style={styles.buttonText}>🕐 1-Minute Heavy Task</Text>
+          </TouchableOpacity>
 
         </View>
 
@@ -244,6 +241,7 @@ const styles = StyleSheet.create({
   statRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
   statLabel: { color: '#8B92B0', fontSize: 15 },
   statValue: { color: '#00D9FF', fontSize: 16, fontWeight: 'bold' },
+  statValueHighlight: { color: '#FF9B00' },
   buttonContainer: { marginBottom: 20 },
   button: {
     padding: 14,
