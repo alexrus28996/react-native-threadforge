@@ -1,6 +1,5 @@
+// Author: Abhishek Kumar
 #import "ThreadForge.h"
-
-#import <React/RCTLog.h>
 
 #import <algorithm>
 #import <functional>

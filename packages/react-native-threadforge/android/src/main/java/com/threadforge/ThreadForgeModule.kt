@@ -1,3 +1,4 @@
+// Author: Abhishek Kumar
 package com.threadforge
 
 import com.facebook.react.bridge.Arguments
@@ -42,8 +43,10 @@ class ThreadForgeModule(private val appContext: ReactApplicationContext) :
                 putString("taskId", taskId)
                 putDouble("progress", progress)
             }
-            context.getJSModule(RCTDeviceEventEmitter::class.java)
-                .emit(PROGRESS_EVENT, params)
+            context.runOnUiQueueThread {
+                context.getJSModule(RCTDeviceEventEmitter::class.java)
+                    .emit(PROGRESS_EVENT, params)
+            }
         }
     }
 

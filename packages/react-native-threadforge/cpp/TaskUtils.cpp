@@ -13,6 +13,24 @@ namespace threadforge {
 
 namespace {
 
+constexpr int kDefaultProgressThrottleMs = 100;
+
+bool shouldEmitProgress(bool isFinal,
+                        std::chrono::steady_clock::time_point now,
+                        std::chrono::steady_clock::time_point& lastEmission,
+                        std::chrono::milliseconds interval) {
+    if (isFinal) {
+        return true;
+    }
+
+    if (now - lastEmission >= interval) {
+        lastEmission = now;
+        return true;
+    }
+
+    return false;
+}
+
 void validateDescriptor(const TaskDescriptor& descriptor) {
     if (descriptor.type.empty()) {
         throw std::invalid_argument("Task descriptor missing type");
@@ -162,10 +180,20 @@ TaskFunction createTaskFunction(const TaskDescriptor& descriptor) {
         return [iterations](const ProgressCallback& progress) {
             double total = 0.0;
             const long long chunk = std::max<long long>(1, iterations / 100);
+            const auto interval = std::chrono::milliseconds(kDefaultProgressThrottleMs);
+            auto lastEmission = std::chrono::steady_clock::now() - interval;
             for (long long i = 0; i < iterations; ++i) {
                 total += std::sqrt(static_cast<double>(i));
                 if (iterations > 0 && (i % chunk == 0 || i == iterations - 1)) {
-                    progress(std::min(1.0, static_cast<double>(i + 1) / static_cast<double>(iterations)));
+                    const auto now = std::chrono::steady_clock::now();
+                    const bool isFinal = (i == iterations - 1);
+                    if (shouldEmitProgress(
+                            isFinal,
+                            now,
+                            lastEmission,
+                            interval)) {
+                        progress(std::min(1.0, static_cast<double>(i + 1) / static_cast<double>(iterations)));
+                    }
                 }
             }
 
@@ -182,6 +210,7 @@ TaskFunction createTaskFunction(const TaskDescriptor& descriptor) {
             const auto deadline = start + std::chrono::milliseconds(durationMs);
             double sum = 0.0;
             long long iterations = 0;
+            const auto interval = std::chrono::milliseconds(kDefaultProgressThrottleMs);
             auto nextUpdate = start;
 
             while (std::chrono::steady_clock::now() < deadline) {
@@ -194,7 +223,7 @@ TaskFunction createTaskFunction(const TaskDescriptor& descriptor) {
                         ? std::min(1.0, static_cast<double>(elapsed) / static_cast<double>(durationMs))
                         : 1.0;
                     progress(progressValue);
-                    nextUpdate = now + std::chrono::milliseconds(100);
+                    nextUpdate = now + interval;
                 }
             }
 
@@ -217,10 +246,20 @@ TaskFunction createTaskFunction(const TaskDescriptor& descriptor) {
         return [iterations, offset](const ProgressCallback& progress) {
             double total = 0.0;
             const long long chunk = std::max<long long>(1, iterations / 100);
+            const auto interval = std::chrono::milliseconds(kDefaultProgressThrottleMs);
+            auto lastEmission = std::chrono::steady_clock::now() - interval;
             for (long long i = 0; i < iterations; ++i) {
                 total += std::sqrt(static_cast<double>(i + offset));
                 if (iterations > 0 && (i % chunk == 0 || i == iterations - 1)) {
-                    progress(std::min(1.0, static_cast<double>(i + 1) / static_cast<double>(iterations)));
+                    const auto now = std::chrono::steady_clock::now();
+                    const bool isFinal = (i == iterations - 1);
+                    if (shouldEmitProgress(
+                            isFinal,
+                            now,
+                            lastEmission,
+                            interval)) {
+                        progress(std::min(1.0, static_cast<double>(i + 1) / static_cast<double>(iterations)));
+                    }
                 }
             }
 
