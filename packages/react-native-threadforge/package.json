@@ -1,0 +1,32 @@
+{
+  "name": "react-native-threadforge",
+  "version": "1.0.0",
+  "description": "High-performance multithreading library for React Native using JNI",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "echo \"No tests yet\"",
+    "lint": "eslint .",
+    "typescript": "tsc --noEmit"
+  },
+  "keywords": [
+    "react-native",
+    "multithreading",
+    "jni",
+    "threading",
+    "background-tasks",
+    "threadpool",
+    "performance"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "peerDependencies": {
+    "react": "*",
+    "react-native": ">=0.70.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.0",
+    "@types/react-native": "^0.72.0",
+    "typescript": "^5.0.0"
+  }
+}
