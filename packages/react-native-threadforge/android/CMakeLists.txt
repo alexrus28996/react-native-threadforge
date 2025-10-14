@@ -8,6 +8,7 @@ set(CMAKE_VERBOSE_MAKEFILE ON)
 add_library(
     react-native-threadforge
     SHARED
+    ../cpp/CustomTaskRegistry.cpp
     ../cpp/ThreadPool.cpp
     ../cpp/TaskUtils.cpp
     cpp/ThreadForgeJNI.cpp

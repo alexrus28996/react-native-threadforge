@@ -20,9 +20,12 @@ enum class TaskPriority {
     HIGH = 2
 };
 
+using ProgressCallback = std::function<void(double)>;
+using TaskFunction = std::function<std::string(const ProgressCallback&)>;
+
 struct Task {
     std::string id;
-    std::function<std::string()> work;
+    TaskFunction work;
     TaskPriority priority;
     std::atomic<bool> cancelled{false};
     uint64_t sequence{0};
@@ -32,8 +35,11 @@ struct Task {
     bool finished{false};
     std::string result;
 
-    Task(std::string taskId, std::function<std::string()> fn, TaskPriority prio, uint64_t seq)
-        : id(std::move(taskId)), work(std::move(fn)), priority(prio), sequence(seq) {}
+    ProgressCallback progress;
+
+    Task(std::string taskId, TaskFunction fn, TaskPriority prio, uint64_t seq, ProgressCallback callback)
+        : id(std::move(taskId)), work(std::move(fn)), priority(prio), sequence(seq),
+          progress(std::move(callback)) {}
 };
 
 struct TaskComparator {
@@ -50,7 +56,7 @@ public:
     explicit ThreadPool(size_t numThreads = 4);
     ~ThreadPool();
 
-    std::string submitTask(const std::string& taskId, TaskPriority priority, std::function<std::string()> task);
+    std::string submitTask(const std::string& taskId, TaskPriority priority, TaskFunction task, ProgressCallback progress);
     bool cancelTask(const std::string& taskId);
     void pause();
     void resume();
@@ -60,11 +66,15 @@ public:
     size_t getPendingTaskCount() const;
     size_t getActiveTaskCount() const;
 
+    void setConcurrency(size_t threads);
+    size_t getQueueLimit() const;
+    void setQueueLimit(size_t limit);
+
     void shutdown();
-    
+
 private:
     void workerThread();
-    
+
     std::vector<std::thread> workers;
     std::priority_queue<std::shared_ptr<Task>, std::vector<std::shared_ptr<Task>>, TaskComparator> tasks;
     std::unordered_map<std::string, std::shared_ptr<Task>> taskMap;
@@ -76,6 +86,7 @@ private:
     std::atomic<size_t> pendingTasks{0};
     std::atomic<size_t> activeTasks{0};
     std::atomic<uint64_t> sequenceCounter{0};
+    std::atomic<size_t> queueLimit{0};
 };
 
 } // namespace threadforge

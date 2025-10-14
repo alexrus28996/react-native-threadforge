@@ -1,9 +1,13 @@
 #include "ThreadPool.h"
 
+#include <algorithm>
+#include <stdexcept>
+
 namespace threadforge {
 
 ThreadPool::ThreadPool(size_t numThreads) {
-    for (size_t i = 0; i < numThreads; ++i) {
+    const size_t clamped = std::max<size_t>(1, numThreads);
+    for (size_t i = 0; i < clamped; ++i) {
         workers.emplace_back([this] { this->workerThread(); });
     }
 }
@@ -46,7 +50,11 @@ void ThreadPool::workerThread() {
 
         std::string taskResult;
         try {
-            taskResult = task->work();
+            auto progressEmitter = task->progress;
+            if (!progressEmitter) {
+                progressEmitter = [](double) {};
+            }
+            taskResult = task->work(progressEmitter);
         } catch (const std::exception& ex) {
             taskResult = std::string("Task error: ") + ex.what();
         } catch (...) {
@@ -73,14 +81,19 @@ void ThreadPool::workerThread() {
     }
 }
 
-std::string ThreadPool::submitTask(const std::string& taskId, TaskPriority priority, std::function<std::string()> task) {
+std::string ThreadPool::submitTask(const std::string& taskId, TaskPriority priority, TaskFunction task, ProgressCallback progress) {
     auto sequence = sequenceCounter.fetch_add(1);
-    auto taskObj = std::make_shared<Task>(taskId, std::move(task), priority, sequence);
+    auto taskObj = std::make_shared<Task>(taskId, std::move(task), priority, sequence, std::move(progress));
 
     {
         std::unique_lock<std::mutex> lock(queueMutex);
         if (stop) {
             return "Error: ThreadPool is stopped";
+        }
+
+        const auto limit = queueLimit.load();
+        if (limit > 0 && pendingTasks.load() >= limit) {
+            return "Error: ThreadPool queue limit reached";
         }
 
         tasks.push(taskObj);
@@ -156,6 +169,47 @@ size_t ThreadPool::getActiveTaskCount() const {
     return activeTasks.load();
 }
 
+void ThreadPool::setConcurrency(size_t threads) {
+    if (threads == 0) {
+        threads = 1;
+    }
+
+    std::vector<std::thread> oldWorkers;
+    {
+        std::unique_lock<std::mutex> lock(queueMutex);
+        if (pendingTasks.load() > 0 || activeTasks.load() > 0) {
+            throw std::runtime_error("Cannot resize thread pool while tasks are pending or active");
+        }
+        stop = true;
+        paused = false;
+        condition.notify_all();
+        oldWorkers.swap(workers);
+    }
+
+    for (std::thread& worker : oldWorkers) {
+        if (worker.joinable()) {
+            worker.join();
+        }
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(queueMutex);
+        stop = false;
+        paused = false;
+        for (size_t i = 0; i < threads; ++i) {
+            workers.emplace_back([this] { this->workerThread(); });
+        }
+    }
+}
+
+size_t ThreadPool::getQueueLimit() const {
+    return queueLimit.load();
+}
+
+void ThreadPool::setQueueLimit(size_t limit) {
+    queueLimit = limit;
+}
+
 void ThreadPool::shutdown() {
     {
         std::unique_lock<std::mutex> lock(queueMutex);
@@ -170,6 +224,7 @@ void ThreadPool::shutdown() {
             worker.join();
         }
     }
+    workers.clear();
 
     {
         std::lock_guard<std::mutex> lock(queueMutex);
@@ -177,6 +232,8 @@ void ThreadPool::shutdown() {
         taskMap.clear();
         pendingTasks = 0;
         activeTasks = 0;
+        stop = false;
+        paused = false;
     }
 }
 

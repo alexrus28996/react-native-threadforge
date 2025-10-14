@@ -1,5 +1,6 @@
 #import <Foundation/Foundation.h>
 #import <React/RCTBridgeModule.h>
+#import <React/RCTEventEmitter.h>
 
-@interface ThreadForge : NSObject <RCTBridgeModule>
+@interface ThreadForge : RCTEventEmitter <RCTBridgeModule>
 @end
