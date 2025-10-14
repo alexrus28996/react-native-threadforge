@@ -1,79 +1,90 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# ThreadForge Demo Application
 
-# Getting Started
+ThreadForge is a React Native showcase that demonstrates how to execute heavy native
+workloads without blocking the JavaScript thread or the UI. It uses a custom native
+module backed by a C++ thread pool to schedule background jobs while keeping the
+foreground experience responsive.
 
->**Note**: Make sure you have completed the [React Native - Environment Setup](https://reactnative.dev/docs/environment-setup) instructions till "Creating a new application" step, before proceeding.
+This repository contains both the sample application (in the project root) and the
+`react-native-threadforge` package (under `packages/`). The package exposes a typed
+JavaScript API and bridges into native Android code via the JNI layer implemented in
+C++.
 
-## Step 1: Start the Metro Server
+## Features
 
-First, you will need to start **Metro**, the JavaScript _bundler_ that ships _with_ React Native.
+- 🔧 Configurable native thread pool used for all heavy computation.
+- 🔁 Queued tasks with priorities (low, normal, high).
+- 📊 Live stats for active, pending, and allocated worker threads.
+- 🧵 Sample UI with long-running simulations to prove the UI stays responsive while
+  background jobs run in parallel.
 
-To start Metro, run the following command from the _root_ of your React Native project:
+## Prerequisites
+
+Make sure you have completed the official
+[React Native Environment Setup](https://reactnative.dev/docs/environment-setup)
+before continuing. You need Node.js 18+, the Android/iOS build tooling, and either an
+emulator or a device connected to your machine.
+
+## Installing Dependencies
+
+From the project root install JavaScript dependencies:
 
 ```bash
-# using npm
-npm start
-
-# OR using Yarn
-yarn start
+npm install
 ```
 
-## Step 2: Start your Application
+If you are developing on Android, also install the native dependencies by opening the
+`android` directory in Android Studio once so that Gradle can sync the C++ build.
 
-Let Metro Bundler run in its _own_ terminal. Open a _new_ terminal from the _root_ of your React Native project. Run the following command to start your _Android_ or _iOS_ app:
+## Running the App
 
-### For Android
+Open two terminals from the project root:
+
+1. **Start Metro (JavaScript bundler)**
+   ```bash
+   npm start
+   ```
+2. **Launch the native application**
+   ```bash
+   # Android
+   npm run android
+
+   # iOS
+   npm run ios
+   ```
+
+The UI contains several buttons that enqueue heavy work. Observe that the "UI Counter"
+keeps incrementing smoothly while the background tasks are running.
+
+## How It Works
+
+- The JavaScript API lives in `packages/react-native-threadforge/src/index.ts` and
+  serializes task descriptors before sending them over the native bridge.
+- On Android, the `ThreadForgeModule` Kotlin class manages a cached executor that calls
+  into the JNI bindings exposed by `ThreadForgeJNI.cpp`.
+- The JNI layer forwards the work to a C++ `ThreadPool` implementation that schedules
+  tasks onto worker threads based on priority, keeping the UI thread free.
+
+## Troubleshooting
+
+If you encounter `UnsatisfiedLinkError` messages about missing `native*` functions,
+run a clean rebuild of the Android project so the native library is recompiled:
 
 ```bash
-# using npm
+cd android
+./gradlew clean
+cd ..
 npm run android
-
-# OR using Yarn
-yarn android
 ```
 
-### For iOS
+For other build issues consult the React Native
+[Troubleshooting guide](https://reactnative.dev/docs/troubleshooting).
 
-```bash
-# using npm
-npm run ios
+## Contributing
 
-# OR using Yarn
-yarn ios
-```
+Pull requests are welcome! Please open an issue first to discuss what you would like to
+change.
 
-If everything is set up _correctly_, you should see your new app running in your _Android Emulator_ or _iOS Simulator_ shortly provided you have set up your emulator/simulator correctly.
+## License
 
-This is one way to run your app — you can also run it directly from within Android Studio and Xcode respectively.
-
-## Step 3: Modifying your App
-
-Now that you have successfully run the app, let's modify it.
-
-1. Open `App.tsx` in your text editor of choice and edit some lines.
-2. For **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Developer Menu** (<kbd>Ctrl</kbd> + <kbd>M</kbd> (on Window and Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (on macOS)) to see your changes!
-
-   For **iOS**: Hit <kbd>Cmd ⌘</kbd> + <kbd>R</kbd> in your iOS Simulator to reload the app and see your changes!
-
-## Congratulations! :tada:
-
-You've successfully run and modified your React Native App. :partying_face:
-
-### Now what?
-
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [Introduction to React Native](https://reactnative.dev/docs/getting-started).
-
-# Troubleshooting
-
-If you can't get this to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
-
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+MIT

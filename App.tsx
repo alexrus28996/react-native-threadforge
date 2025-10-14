@@ -195,13 +195,13 @@ function App(): JSX.Element {
           <TouchableOpacity
             style={[styles.button, styles.buttonWarning]}
             onPress={runHighPriorityTest}
-            disabled={loading}>
+           >
             <Text style={styles.buttonText}>⚡ High Priority Task</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.button, styles.buttonPrimary]}
             onPress={runOneMinuteTask}
-            disabled={loading}>
+            >
             <Text style={styles.buttonText}>🕐 1-Minute Heavy Task</Text>
           </TouchableOpacity>
 
