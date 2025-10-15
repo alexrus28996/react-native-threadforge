@@ -8,9 +8,9 @@ set(CMAKE_VERBOSE_MAKEFILE ON)
 add_library(
     react-native-threadforge
     SHARED
-    ../cpp/CustomTaskRegistry.cpp
+    ../cpp/FunctionExecutor.cpp
+    ../cpp/TaskResult.cpp
     ../cpp/ThreadPool.cpp
-    ../cpp/TaskUtils.cpp
     cpp/ThreadForgeJNI.cpp
 )
 
@@ -24,8 +24,14 @@ target_include_directories(
 # Find and link libraries
 find_library(LOG_LIB log)
 
+find_package(ReactAndroid REQUIRED CONFIG)
+find_package(fbjni REQUIRED CONFIG)
+
 target_link_libraries(
     react-native-threadforge
     ${LOG_LIB}
     android
+    fbjni::fbjni
+    ReactAndroid::jsi
+    ReactAndroid::hermes_executor
 )

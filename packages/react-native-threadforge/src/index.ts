@@ -1,29 +1,7 @@
 // Author: Abhishek Kumar <alexrus28996@gmail.com>
 import { NativeEventEmitter, NativeModules, type EmitterSubscription } from 'react-native';
 
-type NativeThreadForgeModule = {
-  initialize(threadCount: number): Promise<boolean>;
-  executeTask(taskId: string, priority: number, payload: string): Promise<string>;
-  runRegisteredTask(taskId: string, taskName: string, priority: number, payload: string): Promise<string>;
-  registerTask(name: string, definition: string): Promise<boolean>;
-  unregisterTask(name: string): Promise<boolean>;
-  cancelTask(taskId: string): Promise<boolean>;
-  pause(): Promise<boolean>;
-  resume(): Promise<boolean>;
-  isPaused(): Promise<boolean>;
-  getThreadCount(): Promise<number>;
-  getPendingTaskCount(): Promise<number>;
-  getActiveTaskCount(): Promise<number>;
-  setConcurrency(threadCount: number): Promise<boolean>;
-  setQueueLimit(limit: number): Promise<boolean>;
-  getQueueLimit(): Promise<number>;
-  shutdown(): Promise<boolean>;
-};
-
-const { ThreadForge } = NativeModules as { ThreadForge: NativeThreadForgeModule };
-
 export const DEFAULT_PROGRESS_THROTTLE_MS = 100;
-
 const PROGRESS_EVENT = 'threadforge_progress';
 
 export enum TaskPriority {
@@ -32,77 +10,71 @@ export enum TaskPriority {
   HIGH = 2,
 }
 
-export type ThreadForgeTaskDescriptor =
-  | { type: 'HEAVY_LOOP'; iterations: number }
-  | { type: 'TIMED_LOOP'; durationMs: number }
-  | { type: 'MIXED_LOOP'; iterations: number; offset?: number }
-  | { type: 'INSTANT_MESSAGE'; message: string };
-
-export type ThreadForgeScheduledTask = {
-  id: string;
-  descriptor: ThreadForgeTaskDescriptor;
-  priority?: TaskPriority;
+export type ThreadForgeStats = {
+  threadCount: number;
+  pending: number;
+  active: number;
 };
 
-export type ThreadForgePlaceholder = { fromPayload: string; default?: unknown };
-export type ThreadForgeCustomValue = string | number | boolean | ThreadForgePlaceholder;
+export type ThreadForgeProgressListener = (taskId: string, progress: number) => void;
 
-export type ThreadForgeCustomTaskStep = {
-  type: string;
-  [key: string]: ThreadForgeCustomValue;
+type NativeThreadForgeModule = {
+  initialize(threadCount: number): Promise<boolean>;
+  runFunction(taskId: string, priority: number, source: string): Promise<string>;
+  cancelTask(taskId: string): Promise<boolean>;
+  getStats(): Promise<ThreadForgeStats | string>;
+  shutdown(): Promise<boolean>;
+  addListener?: (eventName: string) => void;
+  removeListeners?: (count: number) => void;
 };
 
-export type ThreadForgeCustomTaskDefinition = {
-  steps: ThreadForgeCustomTaskStep[];
-};
+type NativeRunFunctionSuccess = { status: 'ok'; value: unknown };
+type NativeRunFunctionError = { status: 'error'; message?: string; stack?: string };
+type NativeRunFunctionCancelled = { status: 'cancelled'; message?: string; stack?: string };
+type NativeRunFunctionResponse =
+  | NativeRunFunctionSuccess
+  | NativeRunFunctionError
+  | NativeRunFunctionCancelled;
 
-export type ThreadForgeProgressEvent = {
-  taskId: string;
-  progress: number;
-};
+const { ThreadForge } = NativeModules as { ThreadForge: NativeThreadForgeModule };
 
-export type ThreadForgeRunTaskOptions = {
-  id?: string;
-  priority?: TaskPriority;
-};
-
-type InternalRunTaskOptions = {
-  id: string;
-  priority: TaskPriority;
-};
-
-const serialize = (value: unknown): string => {
-  return JSON.stringify(value ?? {});
-};
-
-const isDescriptor = (value: unknown): value is ThreadForgeTaskDescriptor => {
-  return Boolean(value && typeof value === 'object' && 'type' in (value as Record<string, unknown>));
-};
-
-const toOptions = (input?: ThreadForgeRunTaskOptions | TaskPriority): ThreadForgeRunTaskOptions => {
-  if (typeof input === 'number') {
-    return { priority: input };
+const parseNativeResponse = (payload: string): NativeRunFunctionResponse => {
+  try {
+    return JSON.parse(payload) as NativeRunFunctionResponse;
+  } catch (error) {
+    throw new Error(`Invalid response from native ThreadForge module: ${String(error)}`);
   }
-  return input ?? {};
 };
 
-const ensureTaskOptions = (
-  idFallback: string,
-  options?: ThreadForgeRunTaskOptions | TaskPriority,
-): InternalRunTaskOptions => {
-  const normalized = toOptions(options);
-  return {
-    id: normalized.id ?? idFallback,
-    priority: normalized.priority ?? TaskPriority.NORMAL,
-  };
+const ensureStats = (input: ThreadForgeStats | string): ThreadForgeStats => {
+  if (typeof input === 'string') {
+    try {
+      const parsed = JSON.parse(input) as Partial<ThreadForgeStats>;
+      return {
+        threadCount: parsed.threadCount ?? 0,
+        pending: parsed.pending ?? 0,
+        active: parsed.active ?? 0,
+      };
+    } catch {
+      return { threadCount: 0, pending: 0, active: 0 };
+    }
+  }
+  return input;
 };
 
-class ThreadForgeEngine {
+export class ThreadForgeCancelledError extends Error {
+  constructor(message = 'ThreadForge task was cancelled') {
+    super(message);
+    this.name = 'ThreadForgeCancelledError';
+  }
+}
+
+export class ThreadForgeEngine {
   private initialized = false;
   private readonly emitter = new NativeEventEmitter(ThreadForge);
 
-  async initialize(threadCount = 4) {
-    await ThreadForge.initialize(threadCount);
+  async initialize(threadCount = 4): Promise<void> {
+    await ThreadForge.initialize(Math.max(1, threadCount));
     this.initialized = true;
   }
 
@@ -112,118 +84,55 @@ class ThreadForgeEngine {
     }
   }
 
-  on(event: 'progress', listener: (event: ThreadForgeProgressEvent) => void): EmitterSubscription {
+  onProgress(listener: ThreadForgeProgressListener): EmitterSubscription {
     this.ensureInitialized();
-    return this.emitter.addListener(PROGRESS_EVENT, (payload: ThreadForgeProgressEvent) => {
-      listener(payload);
+    return this.emitter.addListener(PROGRESS_EVENT, (event: { taskId: string; progress: number }) => {
+      listener(event.taskId, event.progress);
     });
   }
 
-  async runTask(
-    arg1: string | ThreadForgeTaskDescriptor,
-    arg2?: ThreadForgeTaskDescriptor | unknown | ThreadForgeRunTaskOptions | TaskPriority,
-    arg3?: ThreadForgeRunTaskOptions | TaskPriority,
-  ) {
+  async runFunction<T>(id: string, fn: () => T, priority: TaskPriority = TaskPriority.NORMAL): Promise<T> {
     this.ensureInitialized();
 
-    if (isDescriptor(arg1)) {
-      const options = ensureTaskOptions(`threadforge-${Date.now()}`, arg2 as ThreadForgeRunTaskOptions | TaskPriority);
-      return this.runNativeTask(options.id, arg1, options.priority);
+    if (typeof id !== 'string' || id.trim().length === 0) {
+      throw new Error('ThreadForge requires a non-empty task id');
     }
 
-    if (isDescriptor(arg2)) {
-      const options = ensureTaskOptions(arg1, arg3);
-      return this.runNativeTask(arg1, arg2, options.priority);
+    if (typeof fn !== 'function') {
+      throw new Error('ThreadForge runFunction expects a callable function');
     }
 
-    const name = arg1;
-    const payload = arg2;
-    const options = ensureTaskOptions(`${name}-${Date.now()}`, arg3);
-    return this.runRegisteredTask(options.id, name, payload, options.priority);
-  }
+    const serialized = fn.toString();
+    const payload = await ThreadForge.runFunction(id, priority, serialized);
+    const response = parseNativeResponse(payload);
 
-  async runNativeTask(taskId: string, descriptor: ThreadForgeTaskDescriptor, priority: TaskPriority = TaskPriority.NORMAL) {
-    this.ensureInitialized();
-    const payload = serialize(descriptor);
-    return ThreadForge.executeTask(taskId, priority, payload);
-  }
-
-  async runRegisteredTask(
-    taskId: string,
-    taskName: string,
-    payload: unknown,
-    priority: TaskPriority = TaskPriority.NORMAL,
-  ) {
-    this.ensureInitialized();
-    return ThreadForge.runRegisteredTask(taskId, taskName, priority, serialize(payload));
-  }
-
-  async registerTask(
-    name: string,
-    definition: ThreadForgeCustomTaskDefinition | (() => ThreadForgeCustomTaskDefinition),
-  ) {
-    this.ensureInitialized();
-    const config = typeof definition === 'function' ? definition() : definition;
-    if (!config || !Array.isArray(config.steps) || config.steps.length === 0) {
-      throw new Error('Custom task definition must include at least one step');
+    if (response.status === 'ok') {
+      return response.value as T;
     }
-    await ThreadForge.registerTask(name, serialize(config));
+
+    if (response.status === 'cancelled') {
+      throw new ThreadForgeCancelledError(response.message);
+    }
+
+    const error = new Error(response.message ?? 'ThreadForge task failed');
+    if (response.stack) {
+      error.stack = response.stack;
+    }
+    throw error;
   }
 
-  async unregisterTask(name: string) {
+  async cancelTask(id: string): Promise<boolean> {
     this.ensureInitialized();
-    await ThreadForge.unregisterTask(name);
+    return ThreadForge.cancelTask(id);
   }
 
-  async cancelTask(taskId: string) {
+  async getStats(): Promise<ThreadForgeStats> {
     this.ensureInitialized();
-    return ThreadForge.cancelTask(taskId);
+    const stats = await ThreadForge.getStats();
+    return ensureStats(stats);
   }
 
-  async pause() {
-    this.ensureInitialized();
-    await ThreadForge.pause();
-  }
-
-  async resume() {
-    this.ensureInitialized();
-    await ThreadForge.resume();
-  }
-
-  async isPaused() {
-    this.ensureInitialized();
-    return ThreadForge.isPaused();
-  }
-
-  async runParallelTasks(tasks: ThreadForgeScheduledTask[]) {
-    return Promise.all(
-      tasks.map((task) => this.runNativeTask(task.id, task.descriptor, task.priority ?? TaskPriority.NORMAL)),
-    );
-  }
-
-  async setConcurrency(threadCount: number) {
-    this.ensureInitialized();
-    await ThreadForge.setConcurrency(threadCount);
-  }
-
-  async setQueueLimit(limit: number) {
-    this.ensureInitialized();
-    await ThreadForge.setQueueLimit(limit);
-  }
-
-  async getStats() {
-    this.ensureInitialized();
-    const [threadCount, pendingTasks, activeTasks, queueLimit] = await Promise.all([
-      ThreadForge.getThreadCount(),
-      ThreadForge.getPendingTaskCount(),
-      ThreadForge.getActiveTaskCount(),
-      ThreadForge.getQueueLimit(),
-    ]);
-
-    return { threadCount, pendingTasks, activeTasks, queueLimit };
-  }
-
-  async shutdown() {
+  async shutdown(): Promise<void> {
     if (!this.initialized) {
       return;
     }
@@ -231,11 +140,10 @@ class ThreadForgeEngine {
     this.initialized = false;
   }
 
-  isInitialized() {
+  isInitialized(): boolean {
     return this.initialized;
   }
 }
 
 export const threadForge = new ThreadForgeEngine();
-export { ThreadForgeEngine };
 export default threadForge;

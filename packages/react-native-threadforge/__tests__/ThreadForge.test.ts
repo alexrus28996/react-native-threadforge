@@ -9,20 +9,11 @@ jest.mock('react-native', () => {
         initialize: jest.fn().mockResolvedValue(true),
         addListener: jest.fn(),
         removeListeners: jest.fn(),
-        executeTask: jest.fn().mockResolvedValue('ok'),
-        runRegisteredTask: jest.fn().mockResolvedValue('custom-ok'),
-        registerTask: jest.fn().mockResolvedValue(true),
-        unregisterTask: jest.fn().mockResolvedValue(true),
+        runFunction: jest
+          .fn()
+          .mockResolvedValue(JSON.stringify({ status: 'ok', value: 42 })),
         cancelTask: jest.fn().mockResolvedValue(true),
-        pause: jest.fn().mockResolvedValue(true),
-        resume: jest.fn().mockResolvedValue(true),
-        isPaused: jest.fn().mockResolvedValue(false),
-        getThreadCount: jest.fn().mockResolvedValue(4),
-        getPendingTaskCount: jest.fn().mockResolvedValue(0),
-        getActiveTaskCount: jest.fn().mockResolvedValue(0),
-        setConcurrency: jest.fn().mockResolvedValue(true),
-        setQueueLimit: jest.fn().mockResolvedValue(true),
-        getQueueLimit: jest.fn().mockResolvedValue(16),
+        getStats: jest.fn().mockResolvedValue({ threadCount: 4, pending: 0, active: 0 }),
         shutdown: jest.fn().mockResolvedValue(true),
       },
     },
@@ -43,7 +34,7 @@ jest.mock('react-native', () => {
 
 const { NativeModules, __listeners } = jest.requireMock('react-native');
 
-import { threadForge, TaskPriority } from '../src';
+import { threadForge, TaskPriority, ThreadForgeCancelledError } from '../src';
 
 describe('threadForge', () => {
   beforeEach(async () => {
@@ -54,48 +45,52 @@ describe('threadForge', () => {
     await threadForge.initialize(2);
   });
 
-  it('serializes native descriptors', async () => {
-    await threadForge.runTask('task-1', { type: 'INSTANT_MESSAGE', message: 'Hello' });
-    expect(NativeModules.ThreadForge.executeTask).toHaveBeenCalledTimes(1);
-    const payload = NativeModules.ThreadForge.executeTask.mock.calls[0][2];
-    expect(JSON.parse(payload)).toEqual({ type: 'INSTANT_MESSAGE', message: 'Hello' });
+  it('runs serialized functions on the native module', async () => {
+    const result = await threadForge.runFunction('math', () => 21 * 2);
+    expect(result).toBe(42);
+    expect(NativeModules.ThreadForge.runFunction).toHaveBeenCalledWith(
+      'math',
+      TaskPriority.NORMAL,
+      expect.stringContaining('21 * 2'),
+    );
   });
 
-  it('registers and executes custom tasks with payload', async () => {
-    await threadForge.registerTask('custom', {
-      steps: [{ type: 'HEAVY_LOOP', iterations: { fromPayload: 'iterations', default: 10 } }],
-    });
-
-    expect(NativeModules.ThreadForge.registerTask).toHaveBeenCalledWith(
-      'custom',
-      JSON.stringify({
-        steps: [{ type: 'HEAVY_LOOP', iterations: { fromPayload: 'iterations', default: 10 } }],
-      }),
+  it('throws typed cancellation errors', async () => {
+    NativeModules.ThreadForge.runFunction.mockResolvedValueOnce(
+      JSON.stringify({ status: 'cancelled', message: 'stopped' }),
     );
-
-    await threadForge.runTask('custom', { iterations: 42 }, { id: 'custom-id', priority: TaskPriority.HIGH });
-    expect(NativeModules.ThreadForge.runRegisteredTask).toHaveBeenCalledWith(
-      'custom-id',
-      'custom',
-      TaskPriority.HIGH,
-      JSON.stringify({ iterations: 42 }),
+    await expect(threadForge.runFunction('cancel-me', () => 0)).rejects.toBeInstanceOf(
+      ThreadForgeCancelledError,
     );
+  });
+
+  it('throws native errors with stack information', async () => {
+    NativeModules.ThreadForge.runFunction.mockResolvedValueOnce(
+      JSON.stringify({ status: 'error', message: 'boom', stack: 'trace' }),
+    );
+    await expect(threadForge.runFunction('boom', () => 0)).rejects.toThrow('boom');
   });
 
   it('emits progress events', () => {
     const handler = jest.fn();
-    const subscription = threadForge.on('progress', handler);
+    const subscription = threadForge.onProgress(handler);
     const progressListeners = __listeners.threadforge_progress ?? [];
     expect(progressListeners).toHaveLength(1);
     progressListeners[0]!({ taskId: 'abc', progress: 0.5 });
-    expect(handler).toHaveBeenCalledWith({ taskId: 'abc', progress: 0.5 });
+    expect(handler).toHaveBeenCalledWith('abc', 0.5);
     subscription.remove();
+  });
+
+  it('parses native stats payloads', async () => {
+    NativeModules.ThreadForge.getStats.mockResolvedValueOnce('{"threadCount":1,"pending":2,"active":3}');
+    const stats = await threadForge.getStats();
+    expect(stats).toEqual({ threadCount: 1, pending: 2, active: 3 });
   });
 
   it('records package metadata for npm distribution', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const pkg = require('../package.json');
-    expect(pkg.version).toBe('1.0.0');
+    expect(pkg.version).toBe('1.1.0');
     expect(pkg.author).toBe('Abhishek Kumar (alexrus28996)');
   });
 });

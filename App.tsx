@@ -1,5 +1,6 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   SafeAreaView,
   ScrollView,
   StatusBar,
@@ -7,13 +8,15 @@ import {
   Text,
   TouchableOpacity,
   View,
-  Alert,
 } from 'react-native';
 import {
   threadForge,
   TaskPriority,
-  ThreadForgeTaskDescriptor,
-} from './packages/react-native-threadforge/src/index';
+  ThreadForgeCancelledError,
+  ThreadForgeStats,
+} from './packages/react-native-threadforge/src';
+
+declare const reportProgress: (progress: number) => void;
 
 type TaskInfo = {
   id: string;
@@ -21,6 +24,8 @@ type TaskInfo = {
   status: 'pending' | 'done' | 'cancelled' | 'error';
   result?: string;
 };
+
+type ProgressMap = Record<string, number>;
 
 const showAlert = (title: string, message: string) => {
   if (typeof Alert.alert === 'function') {
@@ -30,13 +35,46 @@ const showAlert = (title: string, message: string) => {
   }
 };
 
+const createHeavyFunction = () => () => {
+  let sum = 0;
+  for (let i = 0; i < 5_000_000; i++) {
+    sum += Math.sqrt(i);
+    if (i % 200_000 === 0) {
+      reportProgress(i / 5_000_000);
+    }
+  }
+  reportProgress(1);
+  return sum.toFixed(2);
+};
+
+const createTimingFunction = (durationMs: number) => () => {
+  const start = Date.now();
+  let iterations = 0;
+  while (Date.now() - start < durationMs) {
+    Math.log(iterations + 1);
+    iterations++;
+    if (iterations % 25_000 === 0) {
+      reportProgress(Math.min(1, (Date.now() - start) / durationMs));
+    }
+  }
+  reportProgress(1);
+  return `⏱️ Ran ${iterations} loops in ~${(Date.now() - start) / 1000}s`;
+};
+
+const createMessageFunction = (message: string) => () => {
+  reportProgress(1);
+  return message;
+};
+
 function App(): JSX.Element {
-  const [stats, setStats] = useState({ threadCount: 0, pendingTasks: 0, activeTasks: 0 });
+  const [stats, setStats] = useState<ThreadForgeStats>({ threadCount: 0, pending: 0, active: 0 });
   const [tasks, setTasks] = useState<TaskInfo[]>([]);
+  const [progress, setProgress] = useState<ProgressMap>({});
   const [loading, setLoading] = useState(false);
   const [uiCounter, setUiCounter] = useState(0);
   const counterRef = useRef<NodeJS.Timeout | null>(null);
   const statsRef = useRef<NodeJS.Timeout | null>(null);
+  const progressSub = useRef<ReturnType<typeof threadForge.onProgress> | null>(null);
   const isTestEnv = typeof process !== 'undefined' && !!process.env?.JEST_WORKER_ID;
 
   useEffect(() => {
@@ -47,15 +85,17 @@ function App(): JSX.Element {
     (async () => {
       try {
         await threadForge.initialize(4);
+        progressSub.current = threadForge.onProgress((taskId, value) => {
+          setProgress((prev) => ({ ...prev, [taskId]: value }));
+        });
         await updateStats();
-        console.log('✅ ThreadForge initialized');
       } catch (err) {
-        showAlert('Error', String(err));
+        showAlert('Initialization error', String(err));
       }
     })();
 
-    counterRef.current = setInterval(() => setUiCounter((v) => (v + 1) % 10000), 200);
-    statsRef.current = setInterval(updateStats, 1000);
+    counterRef.current = setInterval(() => setUiCounter((v) => (v + 1) % 10_000), 200);
+    statsRef.current = setInterval(updateStats, 1_000);
 
     return () => {
       if (counterRef.current) {
@@ -64,6 +104,7 @@ function App(): JSX.Element {
       if (statsRef.current) {
         clearInterval(statsRef.current);
       }
+      progressSub.current?.remove();
       threadForge.shutdown();
     };
   }, [isTestEnv]);
@@ -83,16 +124,25 @@ function App(): JSX.Element {
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...updates } : t)));
   };
 
-  const runTask = async (label: string, descriptor: ThreadForgeTaskDescriptor, priority: TaskPriority) => {
+  const runBackgroundTask = async (
+    label: string,
+    fn: () => unknown,
+    priority: TaskPriority = TaskPriority.NORMAL,
+  ) => {
     const id = `${label}-${Date.now()}`;
     addTask(id, label);
     setLoading(true);
+    setProgress((prev) => ({ ...prev, [id]: 0 }));
 
     try {
-      const res = await threadForge.runTask(id, descriptor, priority);
-      updateTaskStatus(id, { status: 'done', result: res });
-    } catch (e) {
-      updateTaskStatus(id, { status: 'error', result: String(e) });
+      const result = await threadForge.runFunction(id, fn, priority);
+      updateTaskStatus(id, { status: 'done', result: String(result) });
+    } catch (error) {
+      if (error instanceof ThreadForgeCancelledError) {
+        updateTaskStatus(id, { status: 'cancelled', result: error.message });
+      } else {
+        updateTaskStatus(id, { status: 'error', result: String(error) });
+      }
     } finally {
       setLoading(false);
     }
@@ -100,44 +150,41 @@ function App(): JSX.Element {
 
   const cancelTask = async (id: string) => {
     try {
-      await threadForge.cancelTask(id);
-      updateTaskStatus(id, { status: 'cancelled', result: '🛑 Cancelled by user' });
+      const cancelled = await threadForge.cancelTask(id);
+      if (cancelled) {
+        updateTaskStatus(id, { status: 'cancelled', result: '🛑 Cancelled by user' });
+      }
     } catch (e) {
       showAlert('Error cancelling task', String(e));
     }
   };
 
-  // ---------- Task Examples ----------
-  const runHeavyTask = () =>
-    runTask('HEAVY_LOOP', { type: 'HEAVY_LOOP', iterations: 8_000_000 }, TaskPriority.NORMAL);
-
-  const runOneMinuteTask = () =>
-    runTask('TIMED_LOOP', { type: 'TIMED_LOOP', durationMs: 60_000 }, TaskPriority.NORMAL);
-
-  const runMixedTask = () =>
-    runTask('MIXED_LOOP', { type: 'MIXED_LOOP', iterations: 5_000_000 }, TaskPriority.HIGH);
-
-  const runInstantTask = () =>
-    runTask('INSTANT_MESSAGE', { type: 'INSTANT_MESSAGE', message: 'Hello ThreadForge!' }, TaskPriority.LOW);
-
   const runParallel = async () => {
-    const idPrefix = `parallel-${Date.now()}`;
-    for (let i = 0; i < 4; i++) {
-      addTask(`${idPrefix}-${i}`, `Parallel-${i + 1}`);
-    }
+    const prefix = `parallel-${Date.now()}`;
+    const jobs = Array.from({ length: 4 }, (_, index) => ({
+      id: `${prefix}-${index}`,
+      fn: createHeavyFunction(),
+      priority: TaskPriority.NORMAL,
+    }));
+
+    jobs.forEach((job) => {
+      addTask(job.id, `Parallel-${job.id.split('-').pop()}`);
+      setProgress((prev) => ({ ...prev, [job.id]: 0 }));
+    });
+
+    setLoading(true);
     try {
-      const results = await threadForge.runParallelTasks(
-        Array.from({ length: 4 }, (_, i) => ({
-          id: `${idPrefix}-${i}`,
-          descriptor: { type: 'HEAVY_LOOP', iterations: 2_000_000 + i * 1_000_000 },
-          priority: TaskPriority.NORMAL,
-        }))
+      const results = await Promise.all(
+        jobs.map((job) => threadForge.runFunction(job.id, job.fn, job.priority)),
       );
-      results.forEach((r, i) =>
-        updateTaskStatus(`${idPrefix}-${i}`, { status: 'done', result: r })
-      );
-    } catch (e) {
-      showAlert('Parallel error', String(e));
+      results.forEach((result, index) => {
+        const id = jobs[index]!.id;
+        updateTaskStatus(id, { status: 'done', result: String(result) });
+      });
+    } catch (error) {
+      showAlert('Parallel error', String(error));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -145,38 +192,49 @@ function App(): JSX.Element {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.header}>⚡ ThreadForge Test App</Text>
+        <Text style={styles.header}>⚡ ThreadForge Demo</Text>
 
-        {/* Stats */}
         <View style={styles.statsCard}>
           <Text style={styles.stat}>🧵 Threads: {stats.threadCount}</Text>
-          <Text style={styles.stat}>⏳ Pending: {stats.pendingTasks}</Text>
-          <Text style={styles.stat}>⚙️ Active: {stats.activeTasks}</Text>
+          <Text style={styles.stat}>⏳ Pending: {stats.pending}</Text>
+          <Text style={styles.stat}>⚙️ Active: {stats.active}</Text>
           <Text style={styles.stat}>🎡 UI Counter: {uiCounter}</Text>
         </View>
 
-        {/* Task Buttons */}
         <View style={styles.buttonGroup}>
-          <TouchableOpacity style={[styles.btn, styles.btnBlue]} onPress={runHeavyTask} disabled={loading}>
-            <Text style={styles.btnText}>Run Heavy Task</Text>
+          <TouchableOpacity
+            style={[styles.btn, styles.btnBlue]}
+            onPress={() => runBackgroundTask('HeavyMath', createHeavyFunction(), TaskPriority.NORMAL)}
+            disabled={loading}
+          >
+            <Text style={styles.btnText}>Run Heavy Math</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.btn, styles.btnRed]} onPress={runOneMinuteTask} disabled={loading}>
-            <Text style={styles.btnText}>Run 1-Minute Task</Text>
+          <TouchableOpacity
+            style={[styles.btn, styles.btnRed]}
+            onPress={() => runBackgroundTask('Timed500', createTimingFunction(5_000), TaskPriority.HIGH)}
+            disabled={loading}
+          >
+            <Text style={styles.btnText}>Run 5s Timer</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.btn, styles.btnGreen]} onPress={runMixedTask} disabled={loading}>
-            <Text style={styles.btnText}>Run Mixed Task</Text>
+          <TouchableOpacity
+            style={[styles.btn, styles.btnGreen]}
+            onPress={() =>
+              runBackgroundTask('Instant', createMessageFunction('✅ Instant result'), TaskPriority.LOW)
+            }
+          >
+            <Text style={styles.btnText}>Instant Message</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.btn, styles.btnGray]} onPress={runInstantTask}>
-            <Text style={styles.btnText}>Run Instant Task</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.btn, styles.btnOrange]} onPress={runParallel} disabled={loading}>
-            <Text style={styles.btnText}>Run Parallel Tasks</Text>
+          <TouchableOpacity
+            style={[styles.btn, styles.btnOrange]}
+            onPress={runParallel}
+            disabled={loading}
+          >
+            <Text style={styles.btnText}>Run Parallel Batch</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Task List */}
         <View style={styles.taskList}>
-          <Text style={styles.taskHeader}>📋 Running / Completed Tasks</Text>
+          <Text style={styles.taskHeader}>📋 Tasks</Text>
           {tasks.length === 0 ? (
             <Text style={styles.noTasks}>No tasks yet</Text>
           ) : (
@@ -186,13 +244,18 @@ function App(): JSX.Element {
                   <Text style={styles.taskLabel}>{task.label}</Text>
                   <Text style={styles.taskStatus}>
                     {task.status === 'pending'
-                      ? '⏳ Running...'
+                      ? '⏳ Running…'
                       : task.status === 'done'
                       ? '✅ Done'
                       : task.status === 'cancelled'
                       ? '🛑 Cancelled'
                       : '❌ Error'}
                   </Text>
+                  {typeof progress[task.id] === 'number' && task.status === 'pending' && (
+                    <Text style={styles.taskProgress}>
+                      Progress: {Math.round(progress[task.id]! * 100)}%
+                    </Text>
+                  )}
                   {task.result && (
                     <Text style={styles.taskResult} numberOfLines={1}>
                       {task.result}
@@ -200,10 +263,8 @@ function App(): JSX.Element {
                   )}
                 </View>
                 {task.status === 'pending' && (
-                  <TouchableOpacity
-                    style={[styles.btnSmall, styles.btnRed]}
-                    onPress={() => cancelTask(task.id)}>
-                    <Text style={styles.btnTextSmall}>Cancel</Text>
+                  <TouchableOpacity style={styles.cancelBtn} onPress={() => cancelTask(task.id)}>
+                    <Text style={styles.cancelText}>Cancel</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -215,60 +276,110 @@ function App(): JSX.Element {
   );
 }
 
-// ---------------- STYLES ----------------
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0A0E27' },
-  scrollContent: { padding: 20 },
-  header: { color: '#00D9FF', fontSize: 28, fontWeight: 'bold', textAlign: 'center', marginBottom: 16 },
+  container: {
+    flex: 1,
+    backgroundColor: '#10131a',
+  },
+  scrollContent: {
+    padding: 24,
+    paddingBottom: 48,
+  },
+  header: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#f4f7ff',
+    marginBottom: 24,
+  },
   statsCard: {
-    backgroundColor: '#1A1F3A',
-    padding: 16,
+    backgroundColor: '#182032',
     borderRadius: 12,
-    marginBottom: 20,
+    padding: 16,
+    marginBottom: 24,
   },
-  stat: { color: '#E0E6ED', fontSize: 14, paddingVertical: 2 },
-  buttonGroup: { marginBottom: 20 },
+  stat: {
+    fontSize: 16,
+    color: '#e1e6f9',
+    marginBottom: 4,
+  },
+  buttonGroup: {
+    marginBottom: 24,
+  },
   btn: {
-    padding: 14,
+    paddingVertical: 14,
     borderRadius: 10,
+    marginBottom: 12,
     alignItems: 'center',
-    marginVertical: 6,
   },
-  btnBlue: { backgroundColor: '#00D9FF' },
-  btnGreen: { backgroundColor: '#4CAF50' },
-  btnRed: { backgroundColor: '#E53935' },
-  btnGray: { backgroundColor: '#2A3052' },
-  btnOrange: { backgroundColor: '#FF9800' },
-  btnText: { color: '#FFF', fontWeight: '600' },
+  btnBlue: {
+    backgroundColor: '#3b82f6',
+  },
+  btnRed: {
+    backgroundColor: '#ef4444',
+  },
+  btnGreen: {
+    backgroundColor: '#10b981',
+  },
+  btnOrange: {
+    backgroundColor: '#f97316',
+  },
+  btnText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0b1120',
+  },
   taskList: {
-    backgroundColor: '#1A1F3A',
-    padding: 16,
+    backgroundColor: '#161c2a',
     borderRadius: 12,
-    borderColor: '#2A3052',
-    borderWidth: 1,
+    padding: 16,
   },
-  taskHeader: { color: '#00D9FF', fontWeight: 'bold', marginBottom: 8 },
-  noTasks: { color: '#8B92B0', fontStyle: 'italic' },
+  taskHeader: {
+    fontSize: 18,
+    color: '#f4f7ff',
+    marginBottom: 12,
+  },
+  noTasks: {
+    color: '#9ca3af',
+  },
   taskRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    borderBottomColor: '#2A3052',
-    borderBottomWidth: 1,
-    paddingVertical: 6,
+    borderBottomColor: '#1f2937',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 12,
   },
   taskInfo: {
     flex: 1,
+    marginRight: 12,
   },
-  taskLabel: { color: '#E0E6ED', fontSize: 14, fontWeight: '600' },
-  taskStatus: { color: '#8B92B0', fontSize: 13 },
-  taskResult: { color: '#A0A8C2', fontSize: 12 },
-  btnSmall: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-    marginLeft: 8,
+  taskLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#e5e7eb',
   },
-  btnTextSmall: { color: '#FFF', fontSize: 12 },
+  taskStatus: {
+    color: '#d1d5db',
+    marginTop: 4,
+  },
+  taskProgress: {
+    color: '#60a5fa',
+    marginTop: 4,
+  },
+  taskResult: {
+    color: '#9ca3af',
+    marginTop: 4,
+  },
+  cancelBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#f87171',
+  },
+  cancelText: {
+    color: '#111827',
+    fontWeight: '600',
+  },
 });
 
 export default App;
