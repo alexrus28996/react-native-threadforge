@@ -6,6 +6,9 @@ ThreadForge turns React Native into a truly multithreaded environment. Pass any 
 function to `threadForge.runFunction()` and it executes inside an isolated Hermes runtime that lives on a
 native C++ worker thread. Your UI thread stays free while heavy work happens in parallel.
 
+> ℹ️ ThreadForge requires Hermes (the default JS engine on modern React Native versions). No extra setup is
+> needed beyond installing the package and running `pod install` on iOS.
+
 ## 🧩 Installation
 
 ```sh
@@ -42,6 +45,56 @@ console.log(`✅ Found ${result} primes`);
 
 You can schedule multiple functions at once. Each runs inside a fresh Hermes runtime with an isolated
 JS heap so closures and side effects never bleed back to the UI thread.
+
+## 📱 Real world usage example
+
+The snippet below wires `threadForge` into a React component that keeps the UI responsive while calculating
+prime numbers on a background worker:
+
+```tsx
+import React, {useCallback, useEffect, useState} from 'react';
+import {Button, SafeAreaView, Text} from 'react-native';
+import {threadForge} from 'react-native-threadforge';
+
+export function PrimeCounter() {
+  const [isRunning, setRunning] = useState(false);
+  const [primeCount, setPrimeCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    threadForge.initialize(2).catch(console.error);
+    return () => {
+      threadForge.shutdown().catch(console.error);
+    };
+  }, []);
+
+  const findPrimes = useCallback(async () => {
+    setRunning(true);
+    try {
+      const result = await threadForge.runFunction('prime-job', () => {
+        const primes: number[] = [];
+        for (let n = 2; n < 50_000; n++) {
+          if (primes.every((p) => n % p !== 0)) {
+            primes.push(n);
+          }
+        }
+        return primes.length;
+      });
+      setPrimeCount(result);
+    } finally {
+      setRunning(false);
+    }
+  }, []);
+
+  return (
+    <SafeAreaView style={{padding: 24}}>
+      <Button title={isRunning ? 'Crunching…' : 'Compute primes'} onPress={findPrimes} disabled={isRunning} />
+      <Text style={{marginTop: 16}}>
+        {primeCount == null ? 'No results yet' : `Prime numbers under 50k: ${primeCount}`}
+      </Text>
+    </SafeAreaView>
+  );
+}
+```
 
 ## 📊 Progress updates (optional)
 

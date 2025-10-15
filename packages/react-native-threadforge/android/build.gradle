@@ -16,9 +16,55 @@ def safeExtGet(prop, fallback) {
     rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
 }
 
+def toCMakePath(File path) {
+    return path.absolutePath.replace('\\', '/')
+}
+
+def findReactNativeDir() {
+    if (rootProject.ext.has('reactNativeDir')) {
+        return rootProject.ext.get('reactNativeDir')
+    }
+
+    def fromEnv = System.getenv('REACT_NATIVE_DIR')
+    if (fromEnv) {
+        return file(fromEnv)
+    }
+
+    // Look for node_modules/react-native walking up from the project directory.
+    def searchDir = projectDir
+    while (searchDir != null) {
+        def candidate = new File(searchDir, 'node_modules/react-native')
+        if (candidate.exists()) {
+            return candidate
+        }
+        searchDir = searchDir.parentFile
+    }
+
+    // Fall back to the common monorepo structure used in the example app.
+    def fromRoot = rootProject.projectDir.toPath().resolve('../node_modules/react-native').toFile()
+    if (fromRoot.exists()) {
+        return fromRoot
+    }
+
+    throw new org.gradle.api.GradleException('Unable to locate the React Native sources. ' +
+            'Specify reactNativeDir in the root project or set the REACT_NATIVE_DIR environment variable.')
+}
+
+def reactNativeDir = findReactNativeDir()
+def reactAndroidDir = new File(reactNativeDir, 'ReactAndroid')
+
+if (!reactAndroidDir.exists()) {
+    throw new org.gradle.api.GradleException("ReactAndroid sources were not found at ${reactAndroidDir}. " +
+            "Ensure react-native is installed and accessible from this build.")
+}
+
 android {
     compileSdkVersion safeExtGet('compileSdkVersion', 34)
     namespace "com.threadforge"
+
+    buildFeatures {
+        prefab true
+    }
 
     defaultConfig {
         minSdkVersion safeExtGet('minSdkVersion', 23)
@@ -27,7 +73,10 @@ android {
         externalNativeBuild {
             cmake {
                 cppFlags "-O2 -frtti -fexceptions -Wall"
-                arguments "-DANDROID_STL=c++_shared"
+                arguments "-DANDROID_STL=c++_shared",
+                        "-DREACT_ANDROID_DIR=${toCMakePath(reactAndroidDir)}",
+                        "-DPROJECT_BUILD_DIR=${toCMakePath(project.buildDir)}",
+                        "-DANDROID_USE_LEGACY_TOOLCHAIN_FILE=ON"
             }
         }
 
