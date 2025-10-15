@@ -56,11 +56,20 @@ endforeach()
 find_package(ReactAndroid REQUIRED CONFIG)
 find_package(fbjni REQUIRED CONFIG)
 
-target_link_libraries(
-    react-native-threadforge
+set(_threadforge_deps
     ${LOG_LIB}
     android
     fbjni::fbjni
     ReactAndroid::jsi
-    ReactAndroid::hermes_executor
+)
+
+if (TARGET ReactAndroid::hermes_executor)
+    list(APPEND _threadforge_deps ReactAndroid::hermes_executor)
+elseif (TARGET hermes_executor)
+    list(APPEND _threadforge_deps hermes_executor)
+endif()
+
+target_link_libraries(
+    react-native-threadforge
+    ${_threadforge_deps}
 )
