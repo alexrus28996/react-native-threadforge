@@ -2,9 +2,18 @@
 
 #include <algorithm>
 #include <chrono>
-#include <hermes/hermes.h>
 #include <jsi/jsi.h>
 #include <memory>
+
+#if __has_include(<hermes/hermes.h>)
+#include <hermes/hermes.h>
+#elif __has_include(<hermes-engine/hermes/hermes.h>)
+#include <hermes-engine/hermes/hermes.h>
+#else
+namespace facebook::hermes {
+std::unique_ptr<facebook::jsi::Runtime> makeHermesRuntime();
+}
+#endif
 
 namespace threadforge {
 
