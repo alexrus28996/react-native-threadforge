@@ -27,6 +27,46 @@ class ThreadForgeModule(private val appContext: ReactApplicationContext) :
         private const val PROGRESS_EVENT = "threadforge_progress"
 
         private var reactContext: ReactApplicationContext? = null
+        private val hermesCheckLock = Any()
+        @Volatile
+        private var hermesAvailable: Boolean? = null
+        @Volatile
+        private var hermesMissingCause: Throwable? = null
+
+        private fun isHermesAvailable(): Boolean {
+            val cached = hermesAvailable
+            if (cached != null) {
+                return cached
+            }
+
+            synchronized(hermesCheckLock) {
+                val existing = hermesAvailable
+                if (existing != null) {
+                    return existing
+                }
+
+                return try {
+                    Class.forName("com.facebook.hermes.reactexecutor.HermesExecutor")
+                    hermesAvailable = true
+                    true
+                } catch (error: ClassNotFoundException) {
+                    hermesMissingCause = error
+                    hermesAvailable = false
+                    false
+                }
+            }
+        }
+
+        private fun requireHermes() {
+            if (!isHermesAvailable()) {
+                throw IllegalStateException(
+                    "ThreadForge requires the Hermes JS engine on Android. " +
+                        "Set hermesEnabled=true in android/gradle.properties and " +
+                        "add the com.facebook.react:hermes-android dependency to your app.",
+                    hermesMissingCause,
+                )
+            }
+        }
 
         init {
             try {
@@ -66,6 +106,7 @@ class ThreadForgeModule(private val appContext: ReactApplicationContext) :
     }
 
     init {
+        requireHermes()
         setReactContext(appContext)
         nativeSetEventEmitter()
     }
@@ -73,6 +114,7 @@ class ThreadForgeModule(private val appContext: ReactApplicationContext) :
     @ReactMethod
     fun initialize(threadCount: Int, promise: Promise) {
         try {
+            requireHermes()
             nativeInitialize(threadCount)
             promise.resolve(true)
         } catch (e: Exception) {
@@ -84,6 +126,7 @@ class ThreadForgeModule(private val appContext: ReactApplicationContext) :
     fun runFunction(taskId: String, priority: Int, source: String, promise: Promise) {
         executor.execute {
             try {
+                requireHermes()
                 val result = nativeRunFunction(taskId, priority, source)
                 deliverPromise { promise.resolve(result) }
             } catch (e: Exception) {
