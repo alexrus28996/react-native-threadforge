@@ -1,6 +1,9 @@
 // Author: Abhishek Kumar <alexrus28996@gmail.com>
 package com.threadforge
 
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -17,6 +20,7 @@ class ThreadForgeModule(private val appContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(appContext) {
 
     private val executor: ExecutorService = Executors.newCachedThreadPool()
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     companion object {
         const val NAME = "ThreadForge"
@@ -56,6 +60,7 @@ class ThreadForgeModule(private val appContext: ReactApplicationContext) :
     override fun invalidate() {
         super.invalidate()
         executor.shutdownNow()
+        mainHandler.removeCallbacksAndMessages(null)
         nativeClearEventEmitter()
         setReactContext(null)
     }
@@ -80,9 +85,9 @@ class ThreadForgeModule(private val appContext: ReactApplicationContext) :
         executor.execute {
             try {
                 val result = nativeRunFunction(taskId, priority, source)
-                promise.resolve(result)
+                deliverPromise { promise.resolve(result) }
             } catch (e: Exception) {
-                promise.reject("TASK_ERROR", e.message, e)
+                deliverPromise { promise.reject("TASK_ERROR", e.message, e) }
             }
         }
     }
@@ -132,6 +137,21 @@ class ThreadForgeModule(private val appContext: ReactApplicationContext) :
     @ReactMethod
     fun removeListeners(count: Int) {
         // Required for RN EventEmitter compatibility.
+    }
+
+    private fun deliverPromise(action: () -> Unit) {
+        val deliver = Runnable {
+            try {
+                action()
+            } catch (error: RuntimeException) {
+                Log.e(NAME, "Failed to deliver ThreadForge promise", error)
+            }
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            deliver.run()
+        } else {
+            mainHandler.post(deliver)
+        }
     }
 
     private external fun nativeInitialize(threadCount: Int)
