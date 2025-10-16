@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   SafeAreaView,
@@ -18,10 +18,12 @@ import {
 
 declare const reportProgress: (progress: number) => void;
 
+type TaskStatus = 'pending' | 'done' | 'cancelled' | 'error';
+
 type TaskInfo = {
   id: string;
   label: string;
-  status: 'pending' | 'done' | 'cancelled' | 'error';
+  status: TaskStatus;
   result?: string;
 };
 
@@ -132,78 +134,45 @@ function App(): JSX.Element {
   const progressSub = useRef<ReturnType<typeof threadForge.onProgress> | null>(null);
   const isTestEnv = typeof process !== 'undefined' && !!process.env?.JEST_WORKER_ID;
 
-  useEffect(() => {
-    if (isTestEnv) {
-      return;
-    }
-
-    (async () => {
-      try {
-        await threadForge.initialize(4);
-        progressSub.current = threadForge.onProgress((taskId, value) => {
-          setProgress((prev) => ({ ...prev, [taskId]: value }));
-        });
-        await updateStats();
-      } catch (err) {
-        showAlert('Initialization error', String(err));
-      }
-    })();
-
-    counterRef.current = setInterval(() => setUiCounter((v) => (v + 1) % 10_000), 200);
-    statsRef.current = setInterval(updateStats, 1_000);
-
-    return () => {
-      if (counterRef.current) {
-        clearInterval(counterRef.current);
-      }
-      if (statsRef.current) {
-        clearInterval(statsRef.current);
-      }
-      progressSub.current?.remove();
-      threadForge.shutdown();
-    };
-  }, [isTestEnv]);
-
-  const updateStats = async () => {
+  const updateStats = useCallback(async () => {
     try {
-      const s = await threadForge.getStats();
-      setStats(s);
+      const nextStats = await threadForge.getStats();
+      setStats(nextStats);
     } catch {}
-  };
+  }, []);
 
-  const addTask = (id: string, label: string) => {
+  const addTask = useCallback((id: string, label: string) => {
     setTasks((prev) => [...prev, { id, label, status: 'pending' }]);
-  };
+  }, []);
 
-  const updateTaskStatus = (id: string, updates: Partial<TaskInfo>) => {
-    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...updates } : t)));
-  };
+  const updateTaskStatus = useCallback((id: string, updates: Partial<TaskInfo>) => {
+    setTasks((prev) => prev.map((task) => (task.id === id ? { ...task, ...updates } : task)));
+  }, []);
 
-  const runBackgroundTask = async (
-    label: string,
-    fn: () => unknown,
-    priority: TaskPriority = TaskPriority.NORMAL,
-  ) => {
-    const id = `${label}-${Date.now()}`;
-    addTask(id, label);
-    setLoading(true);
-    setProgress((prev) => ({ ...prev, [id]: 0 }));
+  const runBackgroundTask = useCallback(
+    async (label: string, fn: () => unknown, priority: TaskPriority = TaskPriority.NORMAL) => {
+      const id = `${label}-${Date.now()}`;
+      addTask(id, label);
+      setLoading(true);
+      setProgress((prev) => ({ ...prev, [id]: 0 }));
 
-    try {
-      const result = await threadForge.runFunction(id, fn, priority);
-      updateTaskStatus(id, { status: 'done', result: String(result) });
-    } catch (error) {
-      if (error instanceof ThreadForgeCancelledError) {
-        updateTaskStatus(id, { status: 'cancelled', result: error.message });
-      } else {
-        updateTaskStatus(id, { status: 'error', result: String(error) });
+      try {
+        const result = await threadForge.runFunction(id, fn, priority);
+        updateTaskStatus(id, { status: 'done', result: String(result) });
+      } catch (error) {
+        if (error instanceof ThreadForgeCancelledError) {
+          updateTaskStatus(id, { status: 'cancelled', result: error.message });
+        } else {
+          updateTaskStatus(id, { status: 'error', result: String(error) });
+        }
+      } finally {
+        setLoading(false);
       }
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+    [addTask, updateTaskStatus],
+  );
 
-  const cancelTask = async (id: string) => {
+  const cancelTask = useCallback(async (id: string) => {
     try {
       const cancelled = await threadForge.cancelTask(id);
       if (cancelled) {
@@ -212,9 +181,9 @@ function App(): JSX.Element {
     } catch (e) {
       showAlert('Error cancelling task', String(e));
     }
-  };
+  }, [updateTaskStatus]);
 
-  const runParallel = async () => {
+  const runParallel = useCallback(async () => {
     const prefix = `parallel-${Date.now()}`;
     const jobs = Array.from({ length: 4 }, (_, index) => ({
       id: `${prefix}-${index}`,
@@ -241,7 +210,58 @@ function App(): JSX.Element {
     } finally {
       setLoading(false);
     }
-  };
+  }, [addTask, updateTaskStatus]);
+
+  const statusLabel = useMemo<Record<TaskStatus, string>>(
+    () => ({
+      pending: '⏳ Running…',
+      done: '✅ Done',
+      cancelled: '🛑 Cancelled',
+      error: '❌ Error',
+    }),
+    [],
+  );
+
+  useEffect(() => {
+    if (isTestEnv) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const init = async () => {
+      try {
+        await threadForge.initialize(4);
+        if (!isMounted) {
+          return;
+        }
+        progressSub.current = threadForge.onProgress((taskId, value) => {
+          setProgress((prev) => ({ ...prev, [taskId]: value }));
+        });
+        await updateStats();
+      } catch (err) {
+        showAlert('Initialization error', String(err));
+      }
+    };
+
+    init();
+
+    counterRef.current = setInterval(() => setUiCounter((value) => (value + 1) % 10_000), 200);
+    statsRef.current = setInterval(updateStats, 1_000);
+
+    return () => {
+      isMounted = false;
+
+      if (counterRef.current) {
+        clearInterval(counterRef.current);
+      }
+      if (statsRef.current) {
+        clearInterval(statsRef.current);
+      }
+      progressSub.current?.remove();
+      threadForge.shutdown();
+    };
+  }, [isTestEnv, updateStats]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -295,13 +315,7 @@ function App(): JSX.Element {
                 <View style={styles.taskInfo}>
                   <Text style={styles.taskLabel}>{task.label}</Text>
                   <Text style={styles.taskStatus}>
-                    {task.status === 'pending'
-                      ? '⏳ Running…'
-                      : task.status === 'done'
-                      ? '✅ Done'
-                      : task.status === 'cancelled'
-                      ? '🛑 Cancelled'
-                      : '❌ Error'}
+                    {statusLabel[task.status]}
                   </Text>
                   {typeof progress[task.id] === 'number' && task.status === 'pending' && (
                     <Text style={styles.taskProgress}>
