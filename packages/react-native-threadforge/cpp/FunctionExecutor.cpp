@@ -29,18 +29,8 @@ using facebook::jsi::Value;
 
 class SimpleStringBuffer : public StringBuffer {
 public:
-    explicit SimpleStringBuffer(std::string source) : source_(std::move(source)) {}
-
-    size_t size() const override {
-        return source_.size();
-    }
-
-    const uint8_t* data() const override {
-        return reinterpret_cast<const uint8_t*>(source_.c_str());
-    }
-
-private:
-    std::string source_;
+    explicit SimpleStringBuffer(std::string source)
+        : StringBuffer(std::move(source)) {}
 };
 } // namespace
 
