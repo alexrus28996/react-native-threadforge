@@ -56,6 +56,15 @@ endforeach()
 find_package(ReactAndroid REQUIRED CONFIG)
 find_package(fbjni REQUIRED CONFIG)
 
+# Hermes is optional when using an alternative JS engine, but when the
+# hermes-engine prefab is present (the default for React Native Android
+# apps) we need to link against it to satisfy symbols such as
+# facebook::hermes::makeHermesRuntime().  On some build setups the
+# ReactAndroid CMake exports do not create a convenience target like
+# ReactAndroid::hermes_executor, so we look up hermes-engine directly to
+# ensure the shared library is available during linking.
+find_package(hermes-engine QUIET CONFIG)
+
 set(_threadforge_deps
     ${LOG_LIB}
     android
@@ -67,6 +76,10 @@ if (TARGET ReactAndroid::hermes_executor)
     list(APPEND _threadforge_deps ReactAndroid::hermes_executor)
 elseif (TARGET hermes_executor)
     list(APPEND _threadforge_deps hermes_executor)
+endif()
+
+if (TARGET hermes-engine::libhermes)
+    list(APPEND _threadforge_deps hermes-engine::libhermes)
 endif()
 
 target_link_libraries(
