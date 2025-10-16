@@ -71,6 +71,38 @@ describe('threadForge', () => {
     await expect(threadForge.runFunction('boom', () => 0)).rejects.toThrow('boom');
   });
 
+  it('throws a helpful error when Hermes strips function source', async () => {
+    const fn = () => 123;
+    Object.defineProperty(fn, 'toString', {
+      value: () => 'function () {\n  [bytecode]\n}',
+      configurable: true,
+    });
+
+    await expect(threadForge.runFunction('hermes', fn)).rejects.toThrow(
+      'ThreadForge could not serialize the provided function.',
+    );
+    expect(NativeModules.ThreadForge.runFunction).not.toHaveBeenCalled();
+  });
+
+  it('respects a manual __threadforgeSource override', async () => {
+    const fn = () => 321;
+    Object.defineProperty(fn, 'toString', {
+      value: () => 'function () {\n  [bytecode]\n}',
+      configurable: true,
+    });
+    Object.defineProperty(fn, '__threadforgeSource', {
+      value: '() => 7',
+      configurable: true,
+    });
+
+    await threadForge.runFunction('override', fn);
+    expect(NativeModules.ThreadForge.runFunction).toHaveBeenCalledWith(
+      'override',
+      TaskPriority.NORMAL,
+      '() => 7',
+    );
+  });
+
   it('emits progress events', () => {
     const handler = jest.fn();
     const subscription = threadForge.onProgress(handler);

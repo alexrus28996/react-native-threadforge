@@ -115,6 +115,41 @@ threadForge.onProgress((taskId, progress) => {
 });
 ```
 
+## 🧱 Hermes release builds
+
+Hermes omits JavaScript source code when you create bytecode-only bundles (the default for release
+builds). In that mode `fn.toString()` returns a placeholder like `[bytecode]`, which ThreadForge cannot
+reconstruct into executable source for the background runtime. When this happens, `runFunction()` throws
+with a detailed error.
+
+To keep using ThreadForge in release, provide the original function source via the optional
+`__threadforgeSource` property before scheduling the task:
+
+```ts
+const heavyWork = () => {
+  let total = 0;
+  for (let i = 0; i < 1_000_000; i++) {
+    total += Math.sqrt(i);
+  }
+  return total;
+};
+
+Object.defineProperty(heavyWork, '__threadforgeSource', {
+  value: `() => {
+    let total = 0;
+    for (let i = 0; i < 1_000_000; i++) {
+      total += Math.sqrt(i);
+    }
+    return total;
+  }`,
+});
+
+await threadForge.runFunction('heavy', heavyWork);
+```
+
+Helpers can encapsulate this pattern (see the demo app for one example). You can also construct workers
+from strings at runtime to avoid source stripping entirely.
+
 ## 🚀 Features
 
 - Native C++17 thread pool with configurable size and task priorities

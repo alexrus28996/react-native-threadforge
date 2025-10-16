@@ -35,36 +35,91 @@ const showAlert = (title: string, message: string) => {
   }
 };
 
-const createHeavyFunction = () => () => {
-  let sum = 0;
-  for (let i = 0; i < 5_000_000; i++) {
-    sum += Math.sqrt(i);
-    if (i % 200_000 === 0) {
-      reportProgress(i / 5_000_000);
-    }
-  }
-  reportProgress(1);
-  return sum.toFixed(2);
+type ThreadForgeCallable<T> = (() => T) & { __threadforgeSource?: string };
+
+const withThreadForgeSource = <T>(fn: ThreadForgeCallable<T>, source: string): ThreadForgeCallable<T> => {
+  Object.defineProperty(fn, '__threadforgeSource', {
+    value: source,
+    enumerable: false,
+    configurable: true,
+  });
+  return fn;
 };
 
-const createTimingFunction = (durationMs: number) => () => {
-  const start = Date.now();
-  let iterations = 0;
-  while (Date.now() - start < durationMs) {
-    Math.log(iterations + 1);
-    iterations++;
-    if (iterations % 25_000 === 0) {
-      reportProgress(Math.min(1, (Date.now() - start) / durationMs));
-    }
-  }
-  reportProgress(1);
-  return `⏱️ Ran ${iterations} loops in ~${(Date.now() - start) / 1000}s`;
-};
+const createHeavyFunction = () =>
+  withThreadForgeSource(
+    () => {
+      let sum = 0;
+      for (let i = 0; i < 5_000_000; i++) {
+        sum += Math.sqrt(i);
+        if (i % 200_000 === 0) {
+          reportProgress(i / 5_000_000);
+        }
+      }
+      reportProgress(1);
+      return sum.toFixed(2);
+    },
+    [
+      '() => {',
+      '  let sum = 0;',
+      '  for (let i = 0; i < 5_000_000; i++) {',
+      '    sum += Math.sqrt(i);',
+      '    if (i % 200_000 === 0) {',
+      '      reportProgress(i / 5_000_000);',
+      '    }',
+      '  }',
+      '  reportProgress(1);',
+      '  return sum.toFixed(2);',
+      '}',
+    ].join('\n'),
+  );
 
-const createMessageFunction = (message: string) => () => {
-  reportProgress(1);
-  return message;
-};
+const createTimingFunction = (durationMs: number) =>
+  withThreadForgeSource(
+    () => {
+      const start = Date.now();
+      let iterations = 0;
+      while (Date.now() - start < durationMs) {
+        Math.log(iterations + 1);
+        iterations++;
+        if (iterations % 25_000 === 0) {
+          reportProgress(Math.min(1, (Date.now() - start) / durationMs));
+        }
+      }
+      reportProgress(1);
+      return `⏱️ Ran ${iterations} loops in ~${(Date.now() - start) / 1000}s`;
+    },
+    [
+      '() => {',
+      `  const durationMs = ${durationMs};`,
+      '  const start = Date.now();',
+      '  let iterations = 0;',
+      '  while (Date.now() - start < durationMs) {',
+      '    Math.log(iterations + 1);',
+      '    iterations++;',
+      '    if (iterations % 25_000 === 0) {',
+      '      reportProgress(Math.min(1, (Date.now() - start) / durationMs));',
+      '    }',
+      '  }',
+      '  reportProgress(1);',
+      '  return `⏱️ Ran ${iterations} loops in ~${(Date.now() - start) / 1000}s`;',
+      '}',
+    ].join('\n'),
+  );
+
+const createMessageFunction = (message: string) =>
+  withThreadForgeSource(
+    () => {
+      reportProgress(1);
+      return message;
+    },
+    [
+      '() => {',
+      '  reportProgress(1);',
+      `  return ${JSON.stringify(message)};`,
+      '}',
+    ].join('\n'),
+  );
 
 function App(): JSX.Element {
   const [stats, setStats] = useState<ThreadForgeStats>({ threadCount: 0, pending: 0, active: 0 });
@@ -205,14 +260,12 @@ function App(): JSX.Element {
           <TouchableOpacity
             style={[styles.btn, styles.btnBlue]}
             onPress={() => runBackgroundTask('HeavyMath', createHeavyFunction(), TaskPriority.NORMAL)}
-            disabled={loading}
           >
             <Text style={styles.btnText}>Run Heavy Math</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.btn, styles.btnRed]}
             onPress={() => runBackgroundTask('Timed500', createTimingFunction(5_000), TaskPriority.HIGH)}
-            disabled={loading}
           >
             <Text style={styles.btnText}>Run 5s Timer</Text>
           </TouchableOpacity>
@@ -227,7 +280,6 @@ function App(): JSX.Element {
           <TouchableOpacity
             style={[styles.btn, styles.btnOrange]}
             onPress={runParallel}
-            disabled={loading}
           >
             <Text style={styles.btnText}>Run Parallel Batch</Text>
           </TouchableOpacity>

@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+- Detect Hermes bytecode-only placeholders and surface a helpful serialization error with guidance on
+  providing the original source via `__threadforgeSource`.
+- Documented the release-build workflow and added demo helpers so ThreadForge tasks keep running when
+  Hermes strips function bodies.
+
 ## [1.1.0] - 2025-10-14
 
 - Replaced descriptor-based APIs with `ThreadForgeEngine.runFunction()` for executing arbitrary JavaScript functions off the UI thread.

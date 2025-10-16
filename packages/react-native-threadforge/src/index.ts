@@ -18,6 +18,8 @@ export type ThreadForgeStats = {
 
 export type ThreadForgeProgressListener = (taskId: string, progress: number) => void;
 
+type SerializableWorker<T> = (() => T) & { __threadforgeSource?: string };
+
 type NativeThreadForgeModule = {
   initialize(threadCount: number): Promise<boolean>;
   runFunction(taskId: string, priority: number, source: string): Promise<string>;
@@ -37,6 +39,8 @@ type NativeRunFunctionResponse =
   | NativeRunFunctionCancelled;
 
 const { ThreadForge } = NativeModules as { ThreadForge: NativeThreadForgeModule };
+
+const BYTECODE_PLACEHOLDER = '[bytecode]';
 
 const parseNativeResponse = (payload: string): NativeRunFunctionResponse => {
   try {
@@ -91,7 +95,11 @@ export class ThreadForgeEngine {
     });
   }
 
-  async runFunction<T>(id: string, fn: () => T, priority: TaskPriority = TaskPriority.NORMAL): Promise<T> {
+  async runFunction<T>(
+    id: string,
+    fn: SerializableWorker<T>,
+    priority: TaskPriority = TaskPriority.NORMAL,
+  ): Promise<T> {
     this.ensureInitialized();
 
     if (typeof id !== 'string' || id.trim().length === 0) {
@@ -102,7 +110,22 @@ export class ThreadForgeEngine {
       throw new Error('ThreadForge runFunction expects a callable function');
     }
 
-    const serialized = fn.toString();
+    const sourceOverride =
+      typeof fn.__threadforgeSource === 'string' && fn.__threadforgeSource.trim().length > 0
+        ? fn.__threadforgeSource
+        : null;
+    const serialized = sourceOverride ?? fn.toString();
+
+    if (serialized.includes(BYTECODE_PLACEHOLDER)) {
+      throw new Error(
+        [
+          'ThreadForge could not serialize the provided function.',
+          'Hermes strips function source code when producing bytecode-only bundles (commonly in release builds).',
+          'Provide the original source via fn.__threadforgeSource or construct the worker at runtime so its source is available.',
+        ].join(' '),
+      );
+    }
+
     const payload = await ThreadForge.runFunction(id, priority, serialized);
     const response = parseNativeResponse(payload);
 
