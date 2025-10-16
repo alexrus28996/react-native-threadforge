@@ -72,14 +72,64 @@ set(_threadforge_deps
     ReactAndroid::jsi
 )
 
-if (TARGET ReactAndroid::hermes_executor)
-    list(APPEND _threadforge_deps ReactAndroid::hermes_executor)
-elseif (TARGET hermes_executor)
-    list(APPEND _threadforge_deps hermes_executor)
+set(_hermes_target_found OFF)
+
+foreach(_hermes_candidate IN ITEMS
+    ReactAndroid::hermes_executor
+    hermes_executor
+    hermes-engine::libhermes
+    hermes::libhermes
+    hermes::hermes
+)
+    if (TARGET ${_hermes_candidate})
+        list(APPEND _threadforge_deps ${_hermes_candidate})
+        set(_hermes_target_found ON)
+    endif()
+endforeach()
+
+if (NOT _hermes_target_found)
+    # Some build setups (particularly on Windows) do not expose a
+    # convenience CMake target for Hermes even though the prefab package is
+    # available. In that case, fall back to resolving the shared library
+    # directly so that symbols such as facebook::hermes::makeHermesRuntime()
+    # are satisfied at link time.
+    set(_hermes_library_paths)
+    if (DEFINED ANDROID_ABI)
+        set(_hermes_android_abi "${ANDROID_ABI}")
+    elseif(DEFINED CMAKE_ANDROID_ARCH_ABI)
+        set(_hermes_android_abi "${CMAKE_ANDROID_ARCH_ABI}")
+    endif()
+
+    if (DEFINED _hermes_android_abi)
+        set(_hermes_prefab_suffixes
+            "prefab/modules/hermes/libs/${_hermes_android_abi}"
+            "prefab/modules/hermes/libs/android.${_hermes_android_abi}"
+        )
+    else()
+        set(_hermes_prefab_suffixes "prefab/modules/hermes/libs")
+    endif()
+
+    foreach(_base_path ${_reactandroid_search_paths})
+        foreach(_suffix ${_hermes_prefab_suffixes})
+            list(APPEND _hermes_library_paths "${_base_path}/${_suffix}")
+        endforeach()
+    endforeach()
+
+    find_library(
+        HERMES_LIB
+        NAMES hermes libhermes
+        PATHS ${_hermes_library_paths}
+        NO_DEFAULT_PATH
+    )
+
+    if (HERMES_LIB)
+        list(APPEND _threadforge_deps ${HERMES_LIB})
+        set(_hermes_target_found ON)
+    endif()
 endif()
 
-if (TARGET hermes-engine::libhermes)
-    list(APPEND _threadforge_deps hermes-engine::libhermes)
+if (NOT _hermes_target_found)
+    message(WARNING "Hermes library not found. ThreadForge requires Hermes on Android to execute background tasks.")
 endif()
 
 target_link_libraries(
