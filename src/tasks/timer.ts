@@ -1,3 +1,4 @@
+import { formatNumber } from '../utils/formatNumber';
 import { ThreadTask, withThreadSource } from './threadHelpers';
 
 type TimerResult = string;
@@ -18,12 +19,21 @@ export const createTimerTask = (durationMs: number): ThreadTask<TimerResult> => 
 
     globalThis.reportProgress?.(1);
     const elapsedSec = (Date.now() - start) / 1_000;
-    return `⏱️ ${iterations.toLocaleString()} iterations in ~${elapsedSec.toFixed(1)}s`;
+    return `⏱️ ${formatNumber(iterations)} iterations in ~${elapsedSec.toFixed(1)}s`;
   };
 
   return withThreadSource(fn, [
     '() => {',
     `  const durationMs = ${durationMs};`,
+    '  const formatNumber = (value) => {',
+    '    try {',
+    '      return value.toLocaleString();',
+    '    } catch (error) {',
+    "      const [integerPart, fractionalPart] = value.toString().split('.');",
+    "      const withGroupSeparators = integerPart.replace(/\\B(?=(\\d{3})+(?!\\d))/g, ',');",
+    '      return fractionalPart ? `${withGroupSeparators}.${fractionalPart}` : withGroupSeparators;',
+    '    }',
+    '  };',
     '  const start = Date.now();',
     '  let iterations = 0;',
     '  while (Date.now() - start < durationMs) {',
@@ -36,7 +46,7 @@ export const createTimerTask = (durationMs: number): ThreadTask<TimerResult> => 
     '  }',
     '  globalThis.reportProgress?.(1);',
     '  const elapsedSec = (Date.now() - start) / 1000;',
-    '  return `⏱️ ${iterations.toLocaleString()} iterations in ~${elapsedSec.toFixed(1)}s`;',
+    '  return `⏱️ ${formatNumber(iterations)} iterations in ~${elapsedSec.toFixed(1)}s`;',
     '}',
   ]);
 };
