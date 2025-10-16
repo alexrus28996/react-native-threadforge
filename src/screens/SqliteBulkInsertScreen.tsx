@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import SQLite, { SQLiteDatabase, Transaction } from 'react-native-sqlite-storage';
 import { TaskPriority, threadForge } from '../../packages/react-native-threadforge/src';
-import { createSqliteOrderBatchTask } from '../tasks/sqlite';
+import { createSqliteOrderBatchTask, type SqliteOrderRow } from '../tasks/sqlite';
 
 const useIsTestEnvironment = () =>
   typeof process !== 'undefined' && typeof process.env?.JEST_WORKER_ID === 'string';
@@ -36,6 +36,29 @@ const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(
     value,
   );
+};
+
+const normalizeBatchRows = (input: unknown): SqliteOrderRow[] => {
+  // Handle the ideal case where the worker already returned a materialized array.
+  if (Array.isArray(input)) {
+    return input as SqliteOrderRow[];
+  }
+
+  // react-native-sqlite-storage occasionally serializes complex values as JSON strings,
+  // so we defensively parse any string payload to recover the original row objects.
+  if (typeof input === 'string') {
+    try {
+      const parsed = JSON.parse(input) as unknown;
+      if (Array.isArray(parsed)) {
+        return parsed as SqliteOrderRow[];
+      }
+    } catch {
+      // Swallow JSON parsing errors because we surface a clearer error below.
+    }
+  }
+
+  // Provide a descriptive failure so developers immediately know the worker response is malformed.
+  throw new Error('ThreadForge SQLite batch task returned an unexpected payload');
 };
 
 export const SqliteBulkInsertScreen: React.FC<Props> = ({ onBack }) => {
@@ -112,7 +135,8 @@ export const SqliteBulkInsertScreen: React.FC<Props> = ({ onBack }) => {
 
   const insertBatch = useCallback(
     async (batchIndex: number) => {
-      const rows = await threadForge.runFunction(
+      // Capture the worker response before normalizing it because the value may arrive as a stringified payload.
+      const rawRows = await threadForge.runFunction(
         `SQLiteOrders-${Date.now()}-${batchIndex}`,
         createSqliteOrderBatchTask({
           batchSize: BATCH_SIZE,
@@ -121,6 +145,9 @@ export const SqliteBulkInsertScreen: React.FC<Props> = ({ onBack }) => {
         }),
         TaskPriority.HIGH,
       );
+
+      // Normalize the raw worker response so downstream code always receives a strongly typed array of rows.
+      const rows = normalizeBatchRows(rawRows);
 
       await runTransaction((tx) => {
         rows.forEach((row) => {
