@@ -24,6 +24,49 @@ jclass g_moduleClass = nullptr;
 jmethodID g_emitProgress = nullptr;
 std::mutex g_emitterMutex;
 
+class ScopedJniEnv {
+public:
+    explicit ScopedJniEnv(JavaVM* vm)
+        : vm_(vm) {
+        if (!vm_) {
+            return;
+        }
+
+        if (vm_->GetEnv(reinterpret_cast<void**>(&env_), JNI_VERSION_1_6) == JNI_OK && env_) {
+            attached_ = false;
+            return;
+        }
+
+        if (vm_->AttachCurrentThread(&env_, nullptr) == JNI_OK && env_) {
+            attached_ = true;
+        } else {
+            env_ = nullptr;
+        }
+    }
+
+    ScopedJniEnv(const ScopedJniEnv&) = delete;
+    ScopedJniEnv& operator=(const ScopedJniEnv&) = delete;
+
+    ~ScopedJniEnv() {
+        if (attached_ && vm_) {
+            vm_->DetachCurrentThread();
+        }
+    }
+
+    [[nodiscard]] JNIEnv* get() const {
+        return env_;
+    }
+
+    [[nodiscard]] bool valid() const {
+        return env_ != nullptr;
+    }
+
+private:
+    JavaVM* vm_;
+    JNIEnv* env_{nullptr};
+    bool attached_{false};
+};
+
 TaskPriority toTaskPriority(jint priority) {
     switch (priority) {
         case 2:
@@ -136,6 +179,10 @@ Java_com_threadforge_ThreadForgeModule_nativeRunFunction(JNIEnv* env, jobject, j
         };
         auto work = [taskIdStr, sourceStr](const ProgressCallback& progressCallback,
                                            const std::function<bool()>& isCancelled) {
+            ScopedJniEnv envScope(g_vm);
+            if (!envScope.valid()) {
+                return makeErrorResult("Unable to retrieve JNIEnv*.");
+            }
             return runSerializedFunction(taskIdStr,
                                          sourceStr,
                                          progressCallback,
