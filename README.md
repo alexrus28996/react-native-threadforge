@@ -1,52 +1,64 @@
-# ThreadForge
+# ThreadForge Demo App & Library
 
-ThreadForge is a handcrafted React Native showcase application and library that proves how to offload
-CPU-intensive workloads into a native C++ thread pool while keeping the JavaScript and UI threads
-responsive. The repository contains a demo app plus the publishable `react-native-threadforge` package,
-crafted and maintained by Abhishek Kumar.
+ThreadForge is a React Native playground that shows how to move CPU heavy JavaScript work onto a native
+thread pool. The repository contains two pieces:
 
-If you are here to understand how the demo works, start with [`App.tsx`](./App.tsx). The component is
-fully annotated in this README so you can follow how background workers are created, how progress is
-reported, and how results flow back to the UI.
+- **Demo application (`src/`, `App.tsx`)** – buttons that trigger real background jobs so you can see the
+  engine in action.
+- **Reusable library (`packages/react-native-threadforge`)** – the package you publish or install inside a
+  product app.
 
-## Overview
+The goal of this README is to help you try the demo quickly and copy the library patterns into your own
+project without guessing.
 
-ThreadForge delivers a native worker pool that integrates tightly with React Native. It provides JSON
-based task descriptors, prioritized execution, throttled progress events, and a registry for custom
-native jobs. Use the demo app to explore the APIs and verify performance characteristics before
-shipping the library in your own application.
+---
 
-## Quick start
-
-1. **Install dependencies**
-   ```bash
-   npm install
-   ```
-2. **Run the metro bundler**
-   ```bash
-   npm start
-   ```
-3. **Launch the demo application**
-   ```bash
-   npm run android   # or npm run ios
-   ```
-
-The first run may take a few minutes while the native C++ thread pool is compiled.
-
-## Features
-
-- **Native C++ worker pool** with dynamic sizing that keeps heavy computations off the JS thread.
-- **Task priority queue** so latency-sensitive jobs can jump ahead of background work.
-- **Custom task registry** defined in JSON, enabling complex native pipelines without recompilation.
-- **Progress events with native throttling** delivered uniformly across Android and iOS.
-- **Queue management utilities** that expose concurrency controls, queue limits, and runtime stats.
-
-## Installation
-
-Clone the repository and install dependencies in the root directory:
+## 1. Run the demo in five minutes
 
 ```bash
+# 1. Install dependencies
 npm install
+
+# 2. Start Metro
+npm start
+
+# 3. In a second terminal, launch the platform you care about
+npm run android   # or: npm run ios
+```
+
+Once the app is running you can tap the buttons to queue different background jobs:
+
+| Button | What it does |
+| --- | --- |
+| **Run Heavy Math** | Crunches millions of `Math.sqrt` calls and streams progress updates. |
+| **Run 5-Second Timer** | Busy-waits for ~5 seconds while emitting percentage progress. |
+| **Instant Message** | Returns a string immediately to demonstrate low priority jobs. |
+| **Run Parallel Batch** | Queues four heavy math tasks at once to show multi-threading. |
+| **Image Processing & Analytics** | Kicks off two different tasks with different priorities. |
+
+The counter at the top keeps ticking to prove that the JS thread never blocks.
+
+---
+
+## 2. Understand the important files
+
+| Path | Why it matters |
+| --- | --- |
+| [`src/App.tsx`](./src/App.tsx) | Complete example of initializing the engine, scheduling work, handling progress, cancelling, and shutting down. |
+| [`src/tasks/*.ts`](./src/tasks) | Ready-made worker factories you can copy into your own code. |
+| [`packages/react-native-threadforge/src`](./packages/react-native-threadforge/src) | Public TypeScript API for the `threadForge` engine. |
+| [`packages/react-native-threadforge/ios` and `/android`](./packages/react-native-threadforge) | Native bridge + thread pool implementation. |
+
+---
+
+## 3. Use ThreadForge in your app
+
+### Install the package
+
+```bash
+npm install react-native-threadforge
+# and if you build for iOS
+cd ios && pod install
 ```
 
 ### Android setup
@@ -88,9 +100,10 @@ key pieces inside [`App.tsx`](./App.tsx):
      });
    }, []);
    ```
-2. **Task builders** – utility functions such as `createHeavyFunction`, `createTimingFunction`, and
-   `createMessageFunction` wrap the actual work. Each helper attaches a `__threadforgeSource` string so
-   the same function also works in release builds where Hermes strips source code.
+2. **Task builders** – utility functions such as `createHeavyMathTask`, `createTimerTask`,
+   `createInstantMessageTask`, and the new SQLite helpers (`createSqliteHeavyOperationsTask` plus
+   `createSqliteOrderBatchTask`) wrap the actual work. Each helper attaches a `__threadforgeSource`
+   string so the same function also works in release builds where Hermes strips source code.
 3. **Scheduling work** – the shared `runBackgroundTask` helper adds an entry to the task list, runs the
    function on the native pool via `threadForge.runFunction`, and updates UI state when the promise
    resolves. Cancelling simply calls `threadForge.cancelTask(id)`.
@@ -105,51 +118,79 @@ ordinary React state, you can copy the patterns directly into your own screens.
 Initialize ThreadForge when your app boots, then schedule work from any component.
 
 ```tsx
-import React, { useEffect, useState } from 'react';
-import { View, Text, Button } from 'react-native';
+useEffect(() => {
+  const subscription = threadForge.onProgress((taskId, progress) => {
+    if (taskId === 'prime-job') {
+      setProgress(progress);
+    }
+  });
+
+  return () => subscription.remove();
+}, []);
+```
+
+### Cancel, inspect stats, and shut down
+
+```ts
+await threadForge.cancelTask('prime-job');
+const stats = await threadForge.getStats();
+await threadForge.shutdown();
+```
+
+---
+
+## 4. Ready-to-copy component examples
+
+### Simple "Crunch Numbers" button
+
+```tsx
+import React, { useCallback, useEffect, useState } from 'react';
+import { Button, Text, View } from 'react-native';
 import { threadForge } from 'react-native-threadforge';
 
-export function BackgroundSum() {
-  const [result, setResult] = useState<string | null>(null);
+export function CrunchNumbers() {
   const [progress, setProgress] = useState(0);
+  const [result, setResult] = useState<string | null>(null);
+  const [running, setRunning] = useState(false);
 
   useEffect(() => {
     threadForge.initialize(2);
-    const subscription = threadForge.onProgress((taskId, value) => {
-      if (taskId === 'sum-task') {
+    const sub = threadForge.onProgress((taskId, value) => {
+      if (taskId === 'heavy-math') {
         setProgress(value);
       }
     });
     return () => {
-      subscription.remove();
+      sub.remove();
       threadForge.shutdown();
     };
   }, []);
 
-  const runJob = async () => {
-    const job = () => {
-      let total = 0;
-      for (let i = 0; i < 5_000_000; i++) {
-        total += Math.sqrt(i);
-        if (i % 200_000 === 0) {
-          reportProgress(i / 5_000_000);
+  const runTask = useCallback(async () => {
+    setRunning(true);
+    try {
+      const task = () => {
+        let total = 0;
+        for (let i = 0; i < 5_000_000; i++) {
+          total += Math.sqrt(i);
+          if (i % 200_000 === 0) {
+            reportProgress(i / 5_000_000);
+          }
         }
-      }
-      reportProgress(1);
-      return total.toFixed(2);
-    };
-
-    Object.defineProperty(job, '__threadforgeSource', {
-      value: job.toString(),
-    });
-
-    const output = await threadForge.runFunction('sum-task', job);
-    setResult(output);
-  };
+        reportProgress(1);
+        return total.toFixed(2);
+      };
+      Object.defineProperty(task, '__threadforgeSource', { value: task.toString() });
+      const output = await threadForge.runFunction('heavy-math', task);
+      setResult(output);
+    } finally {
+      setRunning(false);
+    }
+  }, []);
 
   return (
     <View>
-      <Button title="Crunch numbers" onPress={runJob} />
+      <Button title={running ? 'Working…' : 'Crunch numbers'} onPress={runTask} disabled={running} />
       <Text>Progress: {(progress * 100).toFixed(0)}%</Text>
       <Text>Result: {result ?? '—'}</Text>
     </View>
@@ -157,47 +198,59 @@ export function BackgroundSum() {
 }
 ```
 
-`reportProgress` is provided globally by ThreadForge inside background runtimes. Call it to emit
-throttled updates to your React components.
+### Parallel queue with cancellation
 
-Register complex native pipelines with JSON descriptors and execute them without recompiling your
-bridges. Runtime helpers expose pause, resume, cancellation, concurrency, and queue limit controls,
-making it simple to adapt to changing workloads.
+```tsx
+const taskIds = ['batch-1', 'batch-2', 'batch-3'];
 
-## Running the Demo Application
+useEffect(() => {
+  threadForge.initialize(3);
+  return () => {
+    taskIds.forEach((id) => threadForge.cancelTask(id));
+    threadForge.shutdown();
+  };
+}, []);
 
-Start Metro with `npm start`, then run `npm run android` or `npm run ios` depending on your platform.
-The counter at the top of the demo continues incrementing smoothly even while native workers crunch on
-heavy tasks, illustrating the responsiveness gains provided by ThreadForge.
+const startBatch = () => {
+  taskIds.forEach((id) => {
+    threadForge.runFunction(id, () => {
+      for (let i = 0; i < 7_000_000; i++) {
+        if (i % 250_000 === 0) {
+          reportProgress(i / 7_000_000);
+        }
+      }
+      reportProgress(1);
+      return `${id} done`;
+    });
+  });
+};
 
-## Library Comparison
+const cancelAll = () => {
+  taskIds.forEach((id) => threadForge.cancelTask(id));
+};
+```
 
-| Capability | ThreadForge | react-native-threads | react-native-multithreading |
-| --- | --- | --- | --- |
-| Native C++ worker pool | ✅ (dynamic sizing) | ❌ (spawns JS runtimes) | ✅ (fixed workers) |
-| JSON task descriptors | ✅ | ❌ | ❌ |
-| Dynamic registry of native tasks | ✅ | ❌ | ⚠️ (requires rebuild) |
-| Native progress events (10 Hz throttle) | ✅ | ❌ | ⚠️ (manual) |
-| Pause/Resume & queue limits | ✅ | ❌ | ⚠️ (partial) |
-| iOS + Android parity | ✅ | ⚠️ (limited iOS support) | ✅ |
-| Works with Hermes | ✅ | ⚠️ (extra config) | ✅ |
+---
 
-## Troubleshooting
+## 5. Troubleshooting checklist
 
-- **UnsatisfiedLinkError:** Run a clean Gradle build so the native shared library is rebuilt.
-- **No progress events:** Confirm `threadForge.initialize` ran before subscribing and the bridge is still active.
-- **iOS build issues:** Re-run `pod install` and clean the Xcode build folder before retrying.
+## SQLite bulk insert demo
 
-## Contributing
-
-Pull requests are welcome. Please open an issue to discuss ideas before submitting significant changes.
+Tap **Open SQLite Bulk Insert Demo** in the home screen to navigate to a dedicated walkthrough that
+combines ThreadForge workers with [`react-native-sqlite-storage`](https://github.com/andpor/react-native-sqlite-storage).
+The screen generates batches of synthetic order rows on a background thread via
+`createSqliteOrderBatchTask`, then uses the native SQLite bridge to insert 10,000 records in chunks of
+500 before querying summary metrics. This mirrors a real-world workflow where the heavy data shaping is
+isolated from the UI thread while native SQL handles persistence and analytics.
 
 ## License
 
-MIT
+---
 
-## Author
+## 6. Want more detail?
 
-ThreadForge is created and maintained by **Abhishek Kumar (alexrus28996)**. Feel free to reach out at
-alexrus28996@gmail.com for collaboration or support enquiries.
+- The [package README](./packages/react-native-threadforge/README.md) focuses on library usage.
+- [`PUBLISHING.md`](./PUBLISHING.md) explains how to release the package to npm.
+- [`__tests__/`](./__tests__) contains Jest tests that exercise the background task helpers.
 
+Happy threading!
