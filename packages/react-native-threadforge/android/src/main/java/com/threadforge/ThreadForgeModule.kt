@@ -1,4 +1,4 @@
-// Author: Abhishek Kumar
+// Author: Abhishek Kumar <alexrus28996@gmail.com>
 package com.threadforge
 
 import com.facebook.react.bridge.Arguments
@@ -10,6 +10,7 @@ import com.facebook.react.module.annotations.ReactModule
 import com.facebook.react.modules.core.DeviceEventManagerModule.RCTDeviceEventEmitter
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import org.json.JSONObject
 
 @ReactModule(name = ThreadForgeModule.NAME)
 class ThreadForgeModule(private val appContext: ReactApplicationContext) :
@@ -75,10 +76,10 @@ class ThreadForgeModule(private val appContext: ReactApplicationContext) :
     }
 
     @ReactMethod
-    fun executeTask(taskId: String, priority: Int, taskData: String, promise: Promise) {
+    fun runFunction(taskId: String, priority: Int, source: String, promise: Promise) {
         executor.execute {
             try {
-                val result = nativeExecuteTask(taskId, priority, taskData)
+                val result = nativeRunFunction(taskId, priority, source)
                 promise.resolve(result)
             } catch (e: Exception) {
                 promise.reject("TASK_ERROR", e.message, e)
@@ -97,92 +98,28 @@ class ThreadForgeModule(private val appContext: ReactApplicationContext) :
     }
 
     @ReactMethod
-    fun pause(promise: Promise) {
+    fun getStats(promise: Promise) {
         try {
-            nativePause()
+            val payload = nativeGetStats() ?: "{}"
+            val json = JSONObject(payload)
+            val map = Arguments.createMap().apply {
+                putInt("threadCount", json.optInt("threadCount"))
+                putInt("pending", json.optInt("pending"))
+                putInt("active", json.optInt("active"))
+            }
+            promise.resolve(map)
+        } catch (e: Exception) {
+            promise.reject("STATS_ERROR", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun shutdown(promise: Promise) {
+        try {
+            nativeShutdown()
             promise.resolve(true)
         } catch (e: Exception) {
-            promise.reject("PAUSE_ERROR", e.message, e)
-        }
-    }
-
-    @ReactMethod
-    fun resume(promise: Promise) {
-        try {
-            nativeResume()
-            promise.resolve(true)
-        } catch (e: Exception) {
-            promise.reject("RESUME_ERROR", e.message, e)
-        }
-    }
-
-    @ReactMethod
-    fun isPaused(promise: Promise) {
-        try {
-            val paused = nativeIsPaused()
-            promise.resolve(paused)
-        } catch (e: Exception) {
-            promise.reject("STATE_ERROR", e.message, e)
-        }
-    }
-
-    @ReactMethod
-    fun getThreadCount(promise: Promise) {
-        try {
-            val count = nativeGetThreadCount()
-            promise.resolve(count)
-        } catch (e: Exception) {
-            promise.reject("COUNT_ERROR", e.message, e)
-        }
-    }
-
-    @ReactMethod
-    fun getPendingTaskCount(promise: Promise) {
-        try {
-            val count = nativeGetPendingTaskCount()
-            promise.resolve(count)
-        } catch (e: Exception) {
-            promise.reject("COUNT_ERROR", e.message, e)
-        }
-    }
-
-    @ReactMethod
-    fun getActiveTaskCount(promise: Promise) {
-        try {
-            val count = nativeGetActiveTaskCount()
-            promise.resolve(count)
-        } catch (e: Exception) {
-            promise.reject("COUNT_ERROR", e.message, e)
-        }
-    }
-
-    @ReactMethod
-    fun setConcurrency(threadCount: Int, promise: Promise) {
-        try {
-            nativeSetConcurrency(threadCount)
-            promise.resolve(true)
-        } catch (e: Exception) {
-            promise.reject("CONCURRENCY_ERROR", e.message, e)
-        }
-    }
-
-    @ReactMethod
-    fun setQueueLimit(limit: Int, promise: Promise) {
-        try {
-            nativeSetQueueLimit(limit)
-            promise.resolve(true)
-        } catch (e: Exception) {
-            promise.reject("QUEUE_LIMIT_ERROR", e.message, e)
-        }
-    }
-
-    @ReactMethod
-    fun getQueueLimit(promise: Promise) {
-        try {
-            val limit = nativeGetQueueLimit()
-            promise.resolve(limit)
-        } catch (e: Exception) {
-            promise.reject("QUEUE_LIMIT_ERROR", e.message, e)
+            promise.reject("SHUTDOWN_ERROR", e.message, e)
         }
     }
 
@@ -197,65 +134,11 @@ class ThreadForgeModule(private val appContext: ReactApplicationContext) :
         // Required for RN EventEmitter compatibility.
     }
 
-    @ReactMethod
-    fun registerTask(name: String, definition: String, promise: Promise) {
-        try {
-            nativeRegisterTask(name, definition)
-            promise.resolve(true)
-        } catch (e: Exception) {
-            promise.reject("REGISTER_ERROR", e.message, e)
-        }
-    }
-
-    @ReactMethod
-    fun unregisterTask(name: String, promise: Promise) {
-        try {
-            nativeUnregisterTask(name)
-            promise.resolve(true)
-        } catch (e: Exception) {
-            promise.reject("REGISTER_ERROR", e.message, e)
-        }
-    }
-
-    @ReactMethod
-    fun runRegisteredTask(taskId: String, name: String, priority: Int, payload: String?, promise: Promise) {
-        executor.execute {
-            try {
-                val result = nativeRunRegisteredTask(taskId, name, priority, payload ?: "")
-                promise.resolve(result)
-            } catch (e: Exception) {
-                promise.reject("TASK_ERROR", e.message, e)
-            }
-        }
-    }
-
-    @ReactMethod
-    fun shutdown(promise: Promise) {
-        try {
-            nativeShutdown()
-            promise.resolve(true)
-        } catch (e: Exception) {
-            promise.reject("SHUTDOWN_ERROR", e.message, e)
-        }
-    }
-
-    // Native methods
     private external fun nativeInitialize(threadCount: Int)
-    private external fun nativeExecuteTask(taskId: String, priority: Int, taskData: String): String
+    private external fun nativeRunFunction(taskId: String, priority: Int, source: String): String
     private external fun nativeCancelTask(taskId: String): Boolean
-    private external fun nativePause()
-    private external fun nativeResume()
-    private external fun nativeIsPaused(): Boolean
-    private external fun nativeGetThreadCount(): Int
-    private external fun nativeGetPendingTaskCount(): Int
-    private external fun nativeGetActiveTaskCount(): Int
+    private external fun nativeGetStats(): String
     private external fun nativeSetEventEmitter()
     private external fun nativeClearEventEmitter()
-    private external fun nativeSetConcurrency(threadCount: Int)
-    private external fun nativeSetQueueLimit(limit: Int)
-    private external fun nativeGetQueueLimit(): Int
-    private external fun nativeRegisterTask(name: String, definition: String)
-    private external fun nativeUnregisterTask(name: String)
-    private external fun nativeRunRegisteredTask(taskId: String, name: String, priority: Int, payload: String): String
     private external fun nativeShutdown()
 }

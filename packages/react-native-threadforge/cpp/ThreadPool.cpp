@@ -38,7 +38,8 @@ void ThreadPool::workerThread() {
                 taskMap.erase(task->id);
                 {
                     std::lock_guard<std::mutex> taskLock(task->mutex);
-                    task->result = "Task cancelled";
+                    task->result = makeCancelledResult();
+                    task->hasResult = true;
                     task->finished = true;
                 }
                 task->completionCv.notify_all();
@@ -48,17 +49,24 @@ void ThreadPool::workerThread() {
             activeTasks++;
         }
 
-        std::string taskResult;
+        TaskResult taskResult;
+        bool hasLocalResult = false;
         try {
             auto progressEmitter = task->progress;
             if (!progressEmitter) {
                 progressEmitter = [](double) {};
             }
-            taskResult = task->work(progressEmitter);
+            auto cancellationCheck = [task]() {
+                return task->cancelled.load();
+            };
+            taskResult = task->work(progressEmitter, cancellationCheck);
+            hasLocalResult = true;
         } catch (const std::exception& ex) {
-            taskResult = std::string("Task error: ") + ex.what();
+            taskResult = makeErrorResult(ex.what());
+            hasLocalResult = true;
         } catch (...) {
-            taskResult = "Task error: unknown exception";
+            taskResult = makeErrorResult("Unknown exception while executing ThreadForge task");
+            hasLocalResult = true;
         }
 
         {
@@ -69,31 +77,40 @@ void ThreadPool::workerThread() {
 
         {
             std::lock_guard<std::mutex> taskLock(task->mutex);
-            if (task->cancelled && task->result.empty()) {
-                task->result = "Task cancelled";
-            } else if (!task->cancelled) {
+            if (!task->finished) {
+                if (task->cancelled) {
+                    taskResult.cancelled = true;
+                    taskResult.success = false;
+                    if (taskResult.errorMessage.empty()) {
+                        taskResult.errorMessage = "Task cancelled";
+                    }
+                    taskResult.valueJson.clear();
+                } else if (!hasLocalResult) {
+                    taskResult = makeErrorResult("ThreadForge task completed without result");
+                }
                 task->result = std::move(taskResult);
+                task->hasResult = true;
+                task->finished = true;
             }
-            task->finished = true;
         }
 
         task->completionCv.notify_all();
     }
 }
 
-std::string ThreadPool::submitTask(const std::string& taskId, TaskPriority priority, TaskFunction task, ProgressCallback progress) {
+TaskResult ThreadPool::submitTask(const std::string& taskId, TaskPriority priority, TaskFunction task, ProgressCallback progress) {
     auto sequence = sequenceCounter.fetch_add(1);
     auto taskObj = std::make_shared<Task>(taskId, std::move(task), priority, sequence, std::move(progress));
 
     {
         std::unique_lock<std::mutex> lock(queueMutex);
         if (stop) {
-            return "Error: ThreadPool is stopped";
+            return makeErrorResult("ThreadPool is stopped");
         }
 
         const auto limit = queueLimit.load();
         if (limit > 0 && pendingTasks.load() >= limit) {
-            return "Error: ThreadPool queue limit reached";
+            return makeErrorResult("ThreadPool queue limit reached");
         }
 
         tasks.push(taskObj);
@@ -108,8 +125,13 @@ std::string ThreadPool::submitTask(const std::string& taskId, TaskPriority prior
         return taskObj->finished;
     });
 
-    if (taskObj->result.empty()) {
-        return taskObj->cancelled ? "Task cancelled" : "Task completed";
+    if (!taskObj->hasResult) {
+        auto result = makeErrorResult("ThreadForge task completed without result");
+        if (taskObj->cancelled) {
+            result.cancelled = true;
+            result.errorMessage = "Task cancelled";
+        }
+        return result;
     }
 
     return taskObj->result;
@@ -129,8 +151,9 @@ bool ThreadPool::cancelTask(const std::string& taskId) {
 
     {
         std::lock_guard<std::mutex> taskLock(taskRef->mutex);
-        if (taskRef->result.empty()) {
-            taskRef->result = "Task cancelled";
+        if (!taskRef->hasResult) {
+            taskRef->result = makeCancelledResult();
+            taskRef->hasResult = true;
         }
         taskRef->finished = true;
     }

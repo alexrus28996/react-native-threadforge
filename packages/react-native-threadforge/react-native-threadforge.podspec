@@ -1,3 +1,4 @@
+# Author: Abhishek Kumar <alexrus28996@gmail.com>
 require "json"
 
 package = JSON.parse(File.read(File.join(__dir__, "package.json")))
@@ -7,7 +8,7 @@ Pod::Spec.new do |s|
   s.version      = package["version"]
   s.summary      = package["description"] || "ThreadForge iOS module"
   s.description  = package["description"] || s.summary
-  s.homepage     = "https://github.com/your-org/react-native-threadforge"
+  s.homepage     = "https://github.com/alexrus28996/react-native-threadforge"
   s.license      = { :type => package["license"] || "MIT" }
   s.author       = package["author"] || "ThreadForge"
   s.platform     = :ios, "12.0"

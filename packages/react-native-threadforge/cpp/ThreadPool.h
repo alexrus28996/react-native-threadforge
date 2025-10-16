@@ -12,6 +12,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "TaskResult.h"
+
 namespace threadforge {
 
 enum class TaskPriority {
@@ -21,7 +23,7 @@ enum class TaskPriority {
 };
 
 using ProgressCallback = std::function<void(double)>;
-using TaskFunction = std::function<std::string(const ProgressCallback&)>;
+using TaskFunction = std::function<TaskResult(const ProgressCallback&, const std::function<bool()>&)>;
 
 struct Task {
     std::string id;
@@ -33,7 +35,8 @@ struct Task {
     std::mutex mutex;
     std::condition_variable completionCv;
     bool finished{false};
-    std::string result;
+    TaskResult result;
+    bool hasResult{false};
 
     ProgressCallback progress;
 
@@ -56,7 +59,7 @@ public:
     explicit ThreadPool(size_t numThreads = 4);
     ~ThreadPool();
 
-    std::string submitTask(const std::string& taskId, TaskPriority priority, TaskFunction task, ProgressCallback progress);
+    TaskResult submitTask(const std::string& taskId, TaskPriority priority, TaskFunction task, ProgressCallback progress);
     bool cancelTask(const std::string& taskId);
     void pause();
     void resume();
