@@ -6,18 +6,15 @@
 #include <memory>
 #include <stdexcept>
 
-#if __has_include(<hermes/hermes.h>)
+#if __has_include(<hermes/Public/hermes.h>)
+#include <hermes/Public/hermes.h>
+#elif __has_include(<hermes/hermes.h>)
 #include <hermes/hermes.h>
 #elif __has_include(<hermes-engine/hermes/hermes.h>)
 #include <hermes-engine/hermes/hermes.h>
 #else
 namespace facebook::hermes {
-inline std::unique_ptr<facebook::jsi::Runtime> makeHermesRuntime() {
-    throw std::runtime_error(
-        "ThreadForge requires the Hermes JavaScript engine on Android. "
-        "Please enable Hermes in your React Native configuration or install "
-        "the hermes-engine dependency.");
-}
+std::unique_ptr<facebook::jsi::Runtime> makeHermesRuntime();
 } // namespace facebook::hermes
 #endif
 
