@@ -43,6 +43,38 @@ private:
     std::string source_;
 };
 
+<<<<<<< ours
+<<<<<<< ours
+class SimpleStringBuffer : public StringBuffer {
+public:
+<<<<<<< ours
+    explicit SimpleStringBuffer(std::string source) : StringBuffer(), source_(std::move(source)) {}
+=======
+class SimpleStringBuffer : public StringBuffer {
+public:
+    explicit SimpleStringBuffer(std::string source) : source_(std::move(source)) {}
+>>>>>>> theirs
+=======
+    explicit SimpleStringBuffer(std::string source) : source_(std::move(source)) {}
+>>>>>>> theirs
+
+    size_t size() const override {
+        return source_.size();
+    }
+
+    const uint8_t* data() const override {
+        return reinterpret_cast<const uint8_t*>(source_.c_str());
+    }
+
+private:
+    std::string source_;
+};
+
+<<<<<<< ours
+=======
+>>>>>>> theirs
+=======
+>>>>>>> theirs
 } // namespace
 
 TaskResult runSerializedFunction(const std::string& taskId,
