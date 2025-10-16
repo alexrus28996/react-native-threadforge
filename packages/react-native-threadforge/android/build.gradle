@@ -114,5 +114,8 @@ repositories {
 
 dependencies {
     implementation 'com.facebook.react:react-android'
+    // Hermes provides the JS engine used by ThreadForge's background runtime.
+    // Ensure the hermes prefab is available so CMake can link against it.
+    implementation 'com.facebook.react:hermes-android'
     implementation "org.jetbrains.kotlin:kotlin-stdlib:1.8.0"
 }

@@ -43,6 +43,15 @@ set(_reactandroid_search_paths
     "${REACT_ANDROID_DIR_CMAKE}/build/react-android/debug/prefab/modules"
 )
 
+if(DEFINED PROJECT_BUILD_DIR)
+    file(TO_CMAKE_PATH "${PROJECT_BUILD_DIR}" PROJECT_BUILD_DIR_CMAKE)
+    list(APPEND _reactandroid_search_paths
+        "${PROJECT_BUILD_DIR_CMAKE}"
+        "${PROJECT_BUILD_DIR_CMAKE}/prefab"
+        "${PROJECT_BUILD_DIR_CMAKE}/prefab/modules"
+    )
+endif()
+
 foreach(path ${_reactandroid_search_paths})
     if (EXISTS "${path}/ReactAndroidConfig.cmake")
         set(ReactAndroid_DIR "${path}")
