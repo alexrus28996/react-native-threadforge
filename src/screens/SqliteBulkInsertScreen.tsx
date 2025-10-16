@@ -59,6 +59,25 @@ const describeUnexpectedPayload = (value: unknown): string => {
   return typeof value;
 };
 
+const isSqliteRowArray = (input: unknown): input is SqliteOrderRow[] =>
+  Array.isArray(input) && input.every((row) => row && typeof row === 'object');
+
+const extractRowsFromContainer = (input: Record<string, unknown>): SqliteOrderRow[] | null => {
+  const candidateKeys = ['value', 'rows', 'data'];
+
+  for (const key of candidateKeys) {
+    const candidate = input[key];
+    if (isSqliteRowArray(candidate)) {
+      console.warn(
+        `[SqliteBulkInsertScreen] Normalized SQLite worker payload wrapped in '${key}' property.`,
+      );
+      return candidate;
+    }
+  }
+
+  return null;
+};
+
 const normalizeBatchRows = (input: unknown): SqliteOrderRow[] => {
   // Handle the ideal case where the worker already returned a materialized array.
   if (Array.isArray(input)) {
@@ -75,6 +94,13 @@ const normalizeBatchRows = (input: unknown): SqliteOrderRow[] => {
       }
     } catch {
       // Swallow JSON parsing errors because we surface a clearer error below.
+    }
+  }
+
+  if (input && typeof input === 'object') {
+    const extracted = extractRowsFromContainer(input as Record<string, unknown>);
+    if (extracted) {
+      return extracted;
     }
   }
 
@@ -175,6 +201,15 @@ export const SqliteBulkInsertScreen: React.FC<Props> = ({ onBack }) => {
 
       // Normalize the raw worker response so downstream code always receives a strongly typed array of rows.
       const rows = normalizeBatchRows(rawRows);
+
+      if (__DEV__) {
+        console.log(
+          '[SqliteBulkInsertScreen] Inserting normalized SQLite rows for batch',
+          batchIndex,
+          'count:',
+          rows.length,
+        );
+      }
 
       await runTransaction((tx) => {
         rows.forEach((row) => {
