@@ -19,8 +19,10 @@ import { createTimerTask } from './tasks/timer';
 import { createInstantMessageTask } from './tasks/instantMessage';
 import { createImageProcessingTask } from './tasks/imageProcessing';
 import { createAnalyticsTask } from './tasks/analytics';
+import { createSqliteHeavyOperationsTask } from './tasks/sqlite';
 import { ThreadTask } from './tasks/threadHelpers';
 import { showAlert } from './utils/showAlert';
+import SqliteBulkInsertScreen from './screens/SqliteBulkInsertScreen';
 
 type TaskStatus = 'pending' | 'done' | 'cancelled' | 'error';
 
@@ -44,30 +46,26 @@ const App: React.FC = () => {
   const [progress, setProgress] = useState<ProgressMap>({});
   const [uiCounter, setUiCounter] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [activeScreen, setActiveScreen] = useState<'home' | 'sqlite'>('home');
   const counterInterval = useRef<NodeJS.Timeout | null>(null);
   const statsInterval = useRef<NodeJS.Timeout | null>(null);
   const progressSubscription = useRef<ProgressSubscription>(null);
   const isTestEnv = useIsTestEnvironment();
 
   const updateStats = useCallback(async () => {
-    console.log('[ThreadForgeDemo] updateStats: called');
     try {
       const nextStats = await threadForge.getStats();
-      console.log('[ThreadForgeDemo] updateStats: received', nextStats);
       setStats(nextStats);
     } catch (error) {
-      console.error('[ThreadForgeDemo] updateStats: error fetching stats', error);
-      console.warn('[ThreadForgeDemo] Unable to fetch stats', error);
+      // Ignore transient native errors; stats will be refreshed on the next interval.
     }
   }, []);
 
   const addTask = useCallback((id: string, label: string) => {
-    console.log('[ThreadForgeDemo] addTask', { id, label });
     setTasks((prev) => [...prev, { id, label, status: 'pending' }]);
   }, []);
 
   const updateTask = useCallback((id: string, updates: Partial<TaskInfo>) => {
-    console.log('[ThreadForgeDemo] updateTask', { id, updates });
     setTasks((prev) => prev.map((task) => (task.id === id ? { ...task, ...updates } : task)));
   }, []);
 
@@ -78,19 +76,15 @@ const App: React.FC = () => {
       priority: TaskPriority = TaskPriority.NORMAL,
     ) => {
       const id = `${label}-${Date.now()}`;
-  console.log('[ThreadForgeDemo] runBackgroundTask: start', { id, label, priority });
-  addTask(id, label);
-  setLoading(true);
-  setProgress((prev) => ({ ...prev, [id]: 0 }));
+      addTask(id, label);
+      setLoading(true);
+      setProgress((prev) => ({ ...prev, [id]: 0 }));
 
       try {
         const result = await threadForge.runFunction(id, taskFactory, priority);
-        console.log('[ThreadForgeDemo] runBackgroundTask: finished', { id, result });
         updateTask(id, { status: 'done', result: String(result) });
       } catch (error) {
-        console.error('[ThreadForgeDemo] runBackgroundTask: error', { id, error });
         if (error instanceof ThreadForgeCancelledError) {
-          console.log('[ThreadForgeDemo] runBackgroundTask: cancelled', { id, message: error.message });
           updateTask(id, { status: 'cancelled', result: error.message });
         } else {
           updateTask(id, { status: 'error', result: String(error) });
@@ -104,15 +98,12 @@ const App: React.FC = () => {
 
   const cancelTask = useCallback(
     async (id: string) => {
-      console.log('[ThreadForgeDemo] cancelTask: attempting', id);
       try {
         const cancelled = await threadForge.cancelTask(id);
-        console.log('[ThreadForgeDemo] cancelTask: result', { id, cancelled });
         if (cancelled) {
           updateTask(id, { status: 'cancelled', result: '🛑 Cancelled by user' });
         }
       } catch (error) {
-        console.error('[ThreadForgeDemo] cancelTask: error', { id, error });
         showAlert('Cancel error', String(error));
       }
     },
@@ -127,7 +118,6 @@ const App: React.FC = () => {
     }));
 
     jobs.forEach(({ id }) => {
-      console.log('[ThreadForgeDemo] runParallelBatch: enqueue', id);
       addTask(id, `Parallel ${id.split('-').pop()}`);
       setProgress((prev) => ({ ...prev, [id]: 0 }));
     });
@@ -136,17 +126,14 @@ const App: React.FC = () => {
     try {
       const results = await Promise.all(
         jobs.map(({ id, task }) => {
-          console.log('[ThreadForgeDemo] runParallelBatch: start job', id);
           return threadForge.runFunction(id, task, TaskPriority.NORMAL);
         }),
       );
       results.forEach((result, index) => {
         const { id } = jobs[index]!;
-        console.log('[ThreadForgeDemo] runParallelBatch: job finished', { id, result });
         updateTask(id, { status: 'done', result: String(result) });
       });
     } catch (error) {
-      console.error('[ThreadForgeDemo] runParallelBatch: error', error);
       showAlert('Parallel execution error', String(error));
     } finally {
       setLoading(false);
@@ -164,34 +151,25 @@ const App: React.FC = () => {
   );
 
   useEffect(() => {
-    console.log('[ThreadForgeDemo] useEffect: mount');
     if (isTestEnv) {
-      console.log('[ThreadForgeDemo] Test environment detected, skipping runtime init');
       return;
     }
 
     let mounted = true;
 
     const initialize = async () => {
-      console.log('[ThreadForgeDemo] initialize: start');
       try {
         await threadForge.initialize(4);
-        console.log('[ThreadForgeDemo] initialize: threadForge.initialize completed');
         if (!mounted) {
-          console.log('[ThreadForgeDemo] initialize: unmounted after init, aborting post-init work');
           return;
         }
 
         progressSubscription.current = threadForge.onProgress((taskId, value) => {
-          console.log('[ThreadForgeDemo] onProgress', { taskId, value });
           setProgress((prev) => ({ ...prev, [taskId]: value }));
         });
-        console.log('[ThreadForgeDemo] initialize: subscribed to progress');
 
         await updateStats();
-        console.log('[ThreadForgeDemo] initialize: updateStats completed');
       } catch (error) {
-        console.error('[ThreadForgeDemo] initialize: error', error);
         showAlert('Initialization error', String(error));
       }
     };
@@ -201,38 +179,27 @@ const App: React.FC = () => {
     counterInterval.current = setInterval(() => {
       setUiCounter((value) => (value + 1) % 10_000);
     }, 200);
-    console.log('[ThreadForgeDemo] counterInterval set', counterInterval.current);
 
     statsInterval.current = setInterval(updateStats, 1_000);
-    console.log('[ThreadForgeDemo] statsInterval set', statsInterval.current);
 
     return () => {
-      console.log('[ThreadForgeDemo] useEffect: cleanup');
       mounted = false;
       if (counterInterval.current) {
-        console.log('[ThreadForgeDemo] Clearing counterInterval', counterInterval.current);
         clearInterval(counterInterval.current);
       }
       if (statsInterval.current) {
-        console.log('[ThreadForgeDemo] Clearing statsInterval', statsInterval.current);
         clearInterval(statsInterval.current);
       }
       if (progressSubscription.current) {
-        console.log('[ThreadForgeDemo] Removing progress subscription');
-        try {
-          progressSubscription.current.remove();
-        } catch (err) {
-          console.error('[ThreadForgeDemo] Error removing progress subscription', err);
-        }
+        progressSubscription.current.remove();
       }
-      try {
-        threadForge.shutdown();
-        console.log('[ThreadForgeDemo] threadForge.shutdown called');
-      } catch (err) {
-        console.error('[ThreadForgeDemo] threadForge.shutdown error', err);
-      }
+      void threadForge.shutdown();
     };
   }, [isTestEnv, updateStats]);
+
+  if (activeScreen === 'sqlite') {
+    return <SqliteBulkInsertScreen onBack={() => setActiveScreen('home')} />;
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -288,6 +255,26 @@ const App: React.FC = () => {
             }}
           >
             <Text style={styles.buttonText}>Image Processing & Analytics</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, styles.buttonTeal]}
+            onPress={() =>
+              runBackgroundTask(
+                'SQLiteReport',
+                createSqliteHeavyOperationsTask(),
+                TaskPriority.HIGH,
+              )
+            }
+          >
+            <Text style={styles.buttonText}>SQLite Analytics Batch</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, styles.buttonIndigo]}
+            onPress={() => setActiveScreen('sqlite')}
+          >
+            <Text style={styles.buttonText}>Open SQLite Bulk Insert Demo</Text>
           </TouchableOpacity>
         </View>
 
@@ -380,6 +367,12 @@ const styles = StyleSheet.create({
   },
   buttonPurple: {
     backgroundColor: '#a855f7',
+  },
+  buttonTeal: {
+    backgroundColor: '#14b8a6',
+  },
+  buttonIndigo: {
+    backgroundColor: '#6366f1',
   },
   taskList: {
     backgroundColor: '#111c34',
