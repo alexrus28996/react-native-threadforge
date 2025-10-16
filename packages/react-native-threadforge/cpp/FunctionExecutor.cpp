@@ -4,6 +4,7 @@
 #include <chrono>
 #include <jsi/jsi.h>
 #include <memory>
+#include <stdexcept>
 
 #if __has_include(<hermes/hermes.h>)
 #include <hermes/hermes.h>
@@ -11,8 +12,13 @@
 #include <hermes-engine/hermes/hermes.h>
 #else
 namespace facebook::hermes {
-std::unique_ptr<facebook::jsi::Runtime> makeHermesRuntime();
+inline std::unique_ptr<facebook::jsi::Runtime> makeHermesRuntime() {
+    throw std::runtime_error(
+        "ThreadForge requires the Hermes JavaScript engine on Android. "
+        "Please enable Hermes in your React Native configuration or install "
+        "the hermes-engine dependency.");
 }
+} // namespace facebook::hermes
 #endif
 
 namespace threadforge {
