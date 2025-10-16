@@ -38,6 +38,27 @@ const formatCurrency = (value: number) => {
   );
 };
 
+const describeUnexpectedPayload = (value: unknown): string => {
+  // Explain null explicitly so we do not misleadingly report it as an object.
+  if (value === null) {
+    return 'null';
+  }
+
+  // Provide a short preview for string payloads to aid debugging while keeping logs compact.
+  if (typeof value === 'string') {
+    return `string (${value.slice(0, 120)}${value.length > 120 ? '…' : ''})`;
+  }
+
+  // Summarise plain objects by their keys so developers can quickly spot mismatched field names.
+  if (typeof value === 'object') {
+    const keys = Object.keys(value as Record<string, unknown>);
+    return keys.length > 0 ? `object with keys: ${keys.join(', ')}` : 'empty object';
+  }
+
+  // Fall back to the JavaScript typeof result for primitives like numbers or booleans.
+  return typeof value;
+};
+
 const normalizeBatchRows = (input: unknown): SqliteOrderRow[] => {
   // Handle the ideal case where the worker already returned a materialized array.
   if (Array.isArray(input)) {
@@ -58,7 +79,13 @@ const normalizeBatchRows = (input: unknown): SqliteOrderRow[] => {
   }
 
   // Provide a descriptive failure so developers immediately know the worker response is malformed.
-  throw new Error('ThreadForge SQLite batch task returned an unexpected payload');
+  throw new Error(
+    [
+      '[SqliteBulkInsertScreen] Expected the SQLite worker to resolve with an array of SqliteOrderRow items.',
+      `Instead received ${describeUnexpectedPayload(input)}.`,
+      'Normalize the worker task to return an array so the UI can insert rows safely.',
+    ].join(' '),
+  );
 };
 
 export const SqliteBulkInsertScreen: React.FC<Props> = ({ onBack }) => {
