@@ -93,7 +93,13 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
 }
 
 JNIEXPORT void JNICALL
-Java_com_threadforge_ThreadForgeModule_nativeInitialize(JNIEnv*, jobject, jint threadCount) {
+Java_com_threadforge_ThreadForgeModule_nativeInitialize(JNIEnv* env, jobject, jint threadCount) {
+    if (!g_vm && env) {
+        JavaVM* vm = nullptr;
+        if (env->GetJavaVM(&vm) == JNI_OK) {
+            g_vm = vm;
+        }
+    }
     ensureThreadPool(static_cast<size_t>(std::max(1, threadCount)));
 }
 
@@ -174,6 +180,12 @@ Java_com_threadforge_ThreadForgeModule_nativeSetEventEmitter(JNIEnv* env, jobjec
     std::lock_guard<std::mutex> lock(g_emitterMutex);
     if (g_moduleClass) {
         return;
+    }
+    if (!g_vm && env) {
+        JavaVM* vm = nullptr;
+        if (env->GetJavaVM(&vm) == JNI_OK) {
+            g_vm = vm;
+        }
     }
     jclass cls = env->GetObjectClass(thiz);
     g_moduleClass = static_cast<jclass>(env->NewGlobalRef(cls));
