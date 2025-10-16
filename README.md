@@ -5,12 +5,33 @@ CPU-intensive workloads into a native C++ thread pool while keeping the JavaScri
 responsive. The repository contains a demo app plus the publishable `react-native-threadforge` package,
 crafted and maintained by Abhishek Kumar.
 
+If you are here to understand how the demo works, start with [`App.tsx`](./App.tsx). The component is
+fully annotated in this README so you can follow how background workers are created, how progress is
+reported, and how results flow back to the UI.
+
 ## Overview
 
 ThreadForge delivers a native worker pool that integrates tightly with React Native. It provides JSON
 based task descriptors, prioritized execution, throttled progress events, and a registry for custom
 native jobs. Use the demo app to explore the APIs and verify performance characteristics before
 shipping the library in your own application.
+
+## Quick start
+
+1. **Install dependencies**
+   ```bash
+   npm install
+   ```
+2. **Run the metro bundler**
+   ```bash
+   npm start
+   ```
+3. **Launch the demo application**
+   ```bash
+   npm run android   # or npm run ios
+   ```
+
+The first run may take a few minutes while the native C++ thread pool is compiled.
 
 ## Features
 
@@ -51,56 +72,93 @@ npm install
    npm run ios
    ```
 
-## Usage
+## Understanding the demo (`App.tsx`)
+
+The demo is intentionally small so you can quickly map concepts to code. Below is a guided tour of the
+key pieces inside [`App.tsx`](./App.tsx):
+
+1. **Initialization** – when the component mounts, ThreadForge spins up four worker threads and starts
+   emitting progress updates. The helpers `counterRef` and `statsRef` keep the UI live while background
+   work runs.
+   ```ts
+   useEffect(() => {
+     threadForge.initialize(4);
+     progressSub.current = threadForge.onProgress((taskId, value) => {
+       setProgress((prev) => ({ ...prev, [taskId]: value }));
+     });
+   }, []);
+   ```
+2. **Task builders** – utility functions such as `createHeavyFunction`, `createTimingFunction`, and
+   `createMessageFunction` wrap the actual work. Each helper attaches a `__threadforgeSource` string so
+   the same function also works in release builds where Hermes strips source code.
+3. **Scheduling work** – the shared `runBackgroundTask` helper adds an entry to the task list, runs the
+   function on the native pool via `threadForge.runFunction`, and updates UI state when the promise
+   resolves. Cancelling simply calls `threadForge.cancelTask(id)`.
+4. **UI state** – a scroll view renders buttons for each demo job plus a task list that shows status,
+   latest progress, and the formatted result returned from native.
+
+Skimming these sections in the file should make the flow of data crystal clear. Because everything is
+ordinary React state, you can copy the patterns directly into your own screens.
+
+### Minimal usage example
 
 Initialize ThreadForge when your app boots, then schedule work from any component.
 
 ```tsx
 import React, { useEffect, useState } from 'react';
-import { View, Text } from 'react-native';
-import { threadForge, TaskPriority, DEFAULT_PROGRESS_THROTTLE_MS } from 'react-native-threadforge';
+import { View, Text, Button } from 'react-native';
+import { threadForge } from 'react-native-threadforge';
 
-export function PrimeSearch() {
-  const [progress, setProgress] = useState(0);
+export function BackgroundSum() {
   const [result, setResult] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
 
   useEffect(() => {
-    let isMounted = true;
-    let subscription: ReturnType<typeof threadForge.on> | null = null;
-
-    async function bootstrap() {
-      await threadForge.initialize(4);
-      subscription = threadForge.on('progress', ({ taskId, progress }) => {
-        if (isMounted && taskId === 'prime-search') {
-          setProgress(progress);
-        }
-      });
-
-      const payload = { type: 'HEAVY_LOOP', iterations: 1_000_000 } as const;
-      const output = await threadForge.runTask('prime-search', payload, TaskPriority.HIGH);
-      if (isMounted) {
-        setResult(output);
+    threadForge.initialize(2);
+    const subscription = threadForge.onProgress((taskId, value) => {
+      if (taskId === 'sum-task') {
+        setProgress(value);
       }
-    }
-
-    bootstrap();
-
+    });
     return () => {
-      isMounted = false;
-      subscription?.remove();
+      subscription.remove();
       threadForge.shutdown();
     };
   }, []);
 
+  const runJob = async () => {
+    const job = () => {
+      let total = 0;
+      for (let i = 0; i < 5_000_000; i++) {
+        total += Math.sqrt(i);
+        if (i % 200_000 === 0) {
+          reportProgress(i / 5_000_000);
+        }
+      }
+      reportProgress(1);
+      return total.toFixed(2);
+    };
+
+    Object.defineProperty(job, '__threadforgeSource', {
+      value: job.toString(),
+    });
+
+    const output = await threadForge.runFunction('sum-task', job);
+    setResult(output);
+  };
+
   return (
     <View>
-      <Text>Prime search progress: {(progress * 100).toFixed(1)}%</Text>
-      <Text>Updates every {DEFAULT_PROGRESS_THROTTLE_MS}ms from native code.</Text>
-      {result ? <Text>Result: {result}</Text> : null}
+      <Button title="Crunch numbers" onPress={runJob} />
+      <Text>Progress: {(progress * 100).toFixed(0)}%</Text>
+      <Text>Result: {result ?? '—'}</Text>
     </View>
   );
 }
 ```
+
+`reportProgress` is provided globally by ThreadForge inside background runtimes. Call it to emit
+throttled updates to your React components.
 
 Register complex native pipelines with JSON descriptors and execute them without recompiling your
 bridges. Runtime helpers expose pause, resume, cancellation, concurrency, and queue limit controls,

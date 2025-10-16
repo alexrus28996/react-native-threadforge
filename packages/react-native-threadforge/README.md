@@ -9,6 +9,14 @@ native C++ worker thread. Your UI thread stays free while heavy work happens in 
 > ℹ️ ThreadForge requires Hermes (the default JS engine on modern React Native versions). No extra setup is
 > needed beyond installing the package and running `pod install` on iOS.
 
+## 🗂️ Repository
+
+The full demo application, native sources, and example screens live at
+[`alexrus28996/react-native-threadforge`](https://github.com/alexrus28996/react-native-threadforge).
+Open [`App.tsx`](https://github.com/alexrus28996/react-native-threadforge/blob/main/App.tsx) in the
+repository for a production-style walkthrough of initialization, scheduling, cancellation, and progress
+tracking.
+
 ## 🧩 Installation
 
 ```sh
@@ -18,6 +26,65 @@ yarn add react-native-threadforge
 
 cd ios && pod install
 ```
+
+## 🏁 Quick start example
+
+Drop the following snippet into a screen or test component to see a full round-trip of initialization,
+execution, and UI updates. It mirrors the flow used in the demo app's `App.tsx` file but stripped down
+to the essentials.
+
+```tsx
+import React, {useEffect, useState} from 'react';
+import {Button, Text, View} from 'react-native';
+import {threadForge} from 'react-native-threadforge';
+
+export function DemoTask() {
+  const [progress, setProgress] = useState(0);
+  const [result, setResult] = useState<string | null>(null);
+
+  useEffect(() => {
+    threadForge.initialize(2);
+    const sub = threadForge.onProgress((taskId, value) => {
+      if (taskId === 'demo-task') {
+        setProgress(value);
+      }
+    });
+    return () => {
+      sub.remove();
+      threadForge.shutdown();
+    };
+  }, []);
+
+  const start = async () => {
+    const job = () => {
+      let total = 0;
+      for (let i = 0; i < 1_000_000; i++) {
+        total += Math.sqrt(i);
+        if (i % 100_000 === 0) {
+          reportProgress(i / 1_000_000);
+        }
+      }
+      reportProgress(1);
+      return total.toFixed(0);
+    };
+
+    Object.defineProperty(job, '__threadforgeSource', {value: job.toString()});
+    const output = await threadForge.runFunction('demo-task', job);
+    setResult(output);
+  };
+
+  return (
+    <View>
+      <Button title="Run background job" onPress={start} />
+      <Text>Progress: {(progress * 100).toFixed(0)}%</Text>
+      <Text>Result: {result ?? '—'}</Text>
+    </View>
+  );
+}
+```
+
+`reportProgress` is a global helper injected by ThreadForge whenever your function runs inside a worker
+runtime. Use it to publish throttled progress events back to JavaScript listeners.
 
 ## ⚡ Initialize the engine
 
