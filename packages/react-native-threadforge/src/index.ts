@@ -53,13 +53,12 @@ if (!rawThreadForge) {
   );
 }
 
-const ThreadForge: NativeThreadForgeModule & Required<
-  Pick<NativeThreadForgeModule, 'addListener' | 'removeListeners'>
-> = {
-  ...rawThreadForge,
+const ThreadForge = Object.assign(rawThreadForge, {
   addListener: rawThreadForge.addListener ?? (() => {}),
   removeListeners: rawThreadForge.removeListeners ?? (() => {}),
-};
+}) as NativeThreadForgeModule & Required<
+  Pick<NativeThreadForgeModule, 'addListener' | 'removeListeners'>
+>;
 
 const BYTECODE_PLACEHOLDER = '[bytecode]';
 
