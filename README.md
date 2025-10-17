@@ -78,6 +78,15 @@ cd ios && pod install
    ```bash
    npx pod-install ios
    ```
+   If you invoke `pod install` manually on Apple Silicon and see an error about `ffi` or `json`
+   extensions being built for `x86_64`, install the arm64-native gems first:
+   ```bash
+   bundle install
+   bundle exec pod install
+   # or, if you rely on the system Ruby:
+   sudo gem uninstall ffi json
+   sudo arch -arm64 gem install ffi:1.16.3 json
+   ```
 3. Launch the demo application:
    ```bash
    npm start
