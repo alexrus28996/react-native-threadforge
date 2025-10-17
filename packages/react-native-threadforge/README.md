@@ -20,7 +20,8 @@ cd ios && pod install
 ```
 
 ThreadForge works with the default Hermes engine on React Native 0.73+. No manual native changes are
-required.
+required. If you disable Hermes for any reason, re-enable it on iOS by keeping `USE_HERMES=1` in your
+`Podfile` (ThreadForge creates a Hermes runtime to execute background work).
 
 ---
 

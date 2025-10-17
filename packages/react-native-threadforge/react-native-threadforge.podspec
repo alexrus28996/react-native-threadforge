@@ -18,6 +18,14 @@ Pod::Spec.new do |s|
   s.public_header_files = "ios/**/*.h"
   s.requires_arc = true
   s.dependency "React-Core"
+  s.dependency "React-jsi"
+
+  hermes_enabled = ENV['USE_HERMES'] != '0'
+  if hermes_enabled
+    s.dependency "React-hermes"
+  else
+    Pod::UI.warn('ThreadForge requires Hermes. Set USE_HERMES=1 in your Podfile to build the iOS target.')
+  end
   s.compiler_flags = "-std=c++17"
   s.pod_target_xcconfig = {
     "CLANG_CXX_LANGUAGE_STANDARD" => "c++17",
