@@ -74,16 +74,18 @@ cd ios && pod install
 ### iOS setup
 
 1. Install Xcode with the Command Line Tools enabled.
-2. Install CocoaPods dependencies:
-   ```bash
-   npx pod-install ios
-   ```
-   If you invoke `pod install` manually on Apple Silicon and see an error about `ffi` or `json`
-   extensions being built for `x86_64`, install the arm64-native gems first:
+2. Install CocoaPods dependencies. The repository ships with a `Gemfile` that pins Apple
+   Silicon–friendly versions of CocoaPods and `ffi`, so always install and invoke pods through
+   Bundler:
    ```bash
    bundle install
-   bundle exec pod install
-   # or, if you rely on the system Ruby:
+   (cd ios && bundle exec pod install)
+   ```
+   `npx pod-install ios` also works, but it uses the system `pod` binary under the hood. If that
+   binary loads an `ffi` or `json` extension built for `x86_64`, you'll see an error like the one
+   below. Re-running the commands through Bundler rebuilds the gems for `arm64` and fixes the
+   issue. As a fallback, uninstall the broken gems and reinstall them for Apple Silicon manually:
+   ```bash
    sudo gem uninstall ffi json
    sudo arch -arm64 gem install ffi:1.16.3 json
    ```
