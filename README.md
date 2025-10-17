@@ -1,7 +1,7 @@
 # ThreadForge Demo App & Library
 
 <p align="center">
-  <img src="./docs/assets/threadforge-logo.svg" alt="React Native ThreadForge logo" width="640" />
+  <img src="./docs/assets/threadforge-logo.png" alt="React Native ThreadForge logo" width="640" />
 </p>
 
 <p align="center">
