@@ -16,7 +16,8 @@ using namespace threadforge;
 
 namespace {
 
-constexpr auto kProgressThrottle = std::chrono::milliseconds(100);
+std::chrono::milliseconds g_progressThrottle = std::chrono::milliseconds(100);
+std::mutex g_configMutex;
 
 ThreadPool* g_threadPool = nullptr;
 JavaVM* g_vm = nullptr;
@@ -115,6 +116,17 @@ void ensureThreadPool(size_t threadCount) {
     g_threadPool = new ThreadPool(threadCount);
 }
 
+std::chrono::milliseconds currentProgressThrottle() {
+    std::lock_guard<std::mutex> lock(g_configMutex);
+    return g_progressThrottle;
+}
+
+void setProgressThrottle(int throttleMs) {
+    const int clamped = std::max(0, throttleMs);
+    std::lock_guard<std::mutex> lock(g_configMutex);
+    g_progressThrottle = std::chrono::milliseconds(clamped);
+}
+
 std::string makeStatsPayload() {
     if (!g_threadPool) {
         return std::string("{\"threadCount\":0,\"pending\":0,\"active\":0}");
@@ -136,13 +148,18 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
 }
 
 JNIEXPORT void JNICALL
-Java_com_threadforge_ThreadForgeModule_nativeInitialize(JNIEnv* env, jobject, jint threadCount) {
+Java_com_threadforge_ThreadForgeModule_nativeInitialize(
+    JNIEnv* env,
+    jobject,
+    jint threadCount,
+    jint progressThrottleMs) {
     if (!g_vm && env) {
         JavaVM* vm = nullptr;
         if (env->GetJavaVM(&vm) == JNI_OK) {
             g_vm = vm;
         }
     }
+    setProgressThrottle(static_cast<int>(progressThrottleMs));
     ensureThreadPool(static_cast<size_t>(std::max(1, threadCount)));
 }
 
@@ -183,10 +200,11 @@ Java_com_threadforge_ThreadForgeModule_nativeRunFunction(JNIEnv* env, jobject, j
             if (!envScope.valid()) {
                 return makeErrorResult("Unable to retrieve JNIEnv*.");
             }
+            const auto throttle = currentProgressThrottle();
             return runSerializedFunction(taskIdStr,
                                          sourceStr,
                                          progressCallback,
-                                         kProgressThrottle,
+                                         throttle,
                                          isCancelled);
         };
         result = g_threadPool->submitTask(taskIdStr,

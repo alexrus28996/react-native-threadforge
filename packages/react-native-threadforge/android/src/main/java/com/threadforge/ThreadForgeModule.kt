@@ -112,10 +112,12 @@ class ThreadForgeModule(private val appContext: ReactApplicationContext) :
     }
 
     @ReactMethod
-    fun initialize(threadCount: Int, promise: Promise) {
+    fun initialize(threadCount: Int, progressThrottleMs: Int, promise: Promise) {
         try {
             requireHermes()
-            nativeInitialize(threadCount)
+            val sanitizedThreadCount = if (threadCount < 1) 1 else threadCount
+            val sanitizedThrottle = if (progressThrottleMs < 0) 0 else progressThrottleMs
+            nativeInitialize(sanitizedThreadCount, sanitizedThrottle)
             promise.resolve(true)
         } catch (e: Exception) {
             promise.reject("INIT_ERROR", e.message, e)
@@ -197,7 +199,7 @@ class ThreadForgeModule(private val appContext: ReactApplicationContext) :
         }
     }
 
-    private external fun nativeInitialize(threadCount: Int)
+    private external fun nativeInitialize(threadCount: Int, progressThrottleMs: Int)
     private external fun nativeRunFunction(taskId: String, priority: Int, source: String): String
     private external fun nativeCancelTask(taskId: String): Boolean
     private external fun nativeGetStats(): String

@@ -1,7 +1,7 @@
 // Author: Abhishek Kumar <alexrus28996@gmail.com>
 import { NativeEventEmitter, NativeModules, type EmitterSubscription } from 'react-native';
 
-export const DEFAULT_PROGRESS_THROTTLE_MS = 100;
+import { DEFAULT_PROGRESS_THROTTLE_MS, DEFAULT_THREAD_COUNT } from './config';
 const PROGRESS_EVENT = 'threadforge_progress';
 
 export enum TaskPriority {
@@ -20,8 +20,12 @@ export type ThreadForgeProgressListener = (taskId: string, progress: number) => 
 
 type SerializableWorker<T> = (() => T) & { __threadforgeSource?: string };
 
+export type ThreadForgeInitOptions = {
+  progressThrottleMs?: number;
+};
+
 type NativeThreadForgeModule = {
-  initialize(threadCount: number): Promise<boolean>;
+  initialize(threadCount: number, progressThrottleMs: number): Promise<boolean>;
   runFunction(taskId: string, priority: number, source: string): Promise<string>;
   cancelTask(taskId: string): Promise<boolean>;
   getStats(): Promise<ThreadForgeStats | string>;
@@ -77,8 +81,18 @@ export class ThreadForgeEngine {
   private initialized = false;
   private readonly emitter = new NativeEventEmitter(ThreadForge);
 
-  async initialize(threadCount = 4): Promise<void> {
-    await ThreadForge.initialize(Math.max(1, threadCount));
+  async initialize(
+    threadCount = DEFAULT_THREAD_COUNT,
+    options: ThreadForgeInitOptions = {},
+  ): Promise<void> {
+    const normalizedThreadCount = Number.isFinite(threadCount)
+      ? threadCount
+      : DEFAULT_THREAD_COUNT;
+    const sanitizedThreadCount = Math.max(1, Math.floor(normalizedThreadCount));
+    const rawThrottle = options.progressThrottleMs ?? DEFAULT_PROGRESS_THROTTLE_MS;
+    const normalizedThrottle = Number.isFinite(rawThrottle) ? rawThrottle : DEFAULT_PROGRESS_THROTTLE_MS;
+    const sanitizedThrottle = Math.max(0, Math.floor(normalizedThrottle));
+    await ThreadForge.initialize(sanitizedThreadCount, sanitizedThrottle);
     this.initialized = true;
   }
 
@@ -168,5 +182,6 @@ export class ThreadForgeEngine {
   }
 }
 
+export { DEFAULT_PROGRESS_THROTTLE_MS, DEFAULT_THREAD_COUNT, threadForgeConfig } from './config';
 export const threadForge = new ThreadForgeEngine();
 export default threadForge;

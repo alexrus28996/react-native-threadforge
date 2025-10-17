@@ -15,11 +15,10 @@
 using namespace threadforge;
 
 namespace {
-constexpr auto kProgressThrottle = std::chrono::milliseconds(100);
-
 std::shared_ptr<ThreadPool> gThreadPool;
 std::mutex gMutex;
 std::function<void(const std::string&, double)> gProgressEmitter;
+std::chrono::milliseconds gProgressThrottle = std::chrono::milliseconds(100);
 
 TaskPriority toTaskPriority(NSInteger priority) {
   switch (priority) {
@@ -58,6 +57,11 @@ std::shared_ptr<ThreadPool> acquireThreadPool(RCTPromiseRejectBlock reject) {
     return nullptr;
   }
   return gThreadPool;
+}
+
+std::chrono::milliseconds currentProgressThrottle() {
+  std::lock_guard<std::mutex> lock(gMutex);
+  return gProgressThrottle;
 }
 
 } // namespace
@@ -108,11 +112,14 @@ RCT_EXPORT_MODULE()
 
 RCT_REMAP_METHOD(initialize,
                  initializeWithThreadCount:(nonnull NSNumber *)threadCount
+                 progressThrottleMs:(nonnull NSNumber *)progressThrottleMs
                  resolver:(RCTPromiseResolveBlock)resolve
                  rejecter:(RCTPromiseRejectBlock)reject)
 {
   std::lock_guard<std::mutex> lock(gMutex);
   try {
+    const auto sanitizedThrottle = std::max(0, [progressThrottleMs intValue]);
+    gProgressThrottle = std::chrono::milliseconds(sanitizedThrottle);
     gThreadPool = std::make_shared<ThreadPool>(std::max(1, [threadCount intValue]));
     resolve(@(YES));
   } catch (const std::exception &ex) {
@@ -143,12 +150,14 @@ RCT_REMAP_METHOD(runFunction,
       }
     };
 
-    auto work = [taskIdentifier, functionSource](const ProgressCallback &progressCallback,
-                                                 const std::function<bool()> &isCancelled) {
+    const auto progressThrottle = currentProgressThrottle();
+    auto work = [taskIdentifier, functionSource, progressThrottle](
+                   const ProgressCallback &progressCallback,
+                   const std::function<bool()> &isCancelled) {
       return runSerializedFunction(taskIdentifier,
                                    functionSource,
                                    progressCallback,
-                                   kProgressThrottle,
+                                   progressThrottle,
                                    isCancelled);
     };
 

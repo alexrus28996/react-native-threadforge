@@ -80,9 +80,9 @@ export default function Example() {
 ## Core API
 
 ```ts
-import { threadForge, TaskPriority } from 'react-native-threadforge';
+import { DEFAULT_THREAD_COUNT, threadForge, TaskPriority } from 'react-native-threadforge';
 
-await threadForge.initialize(4);
+await threadForge.initialize(DEFAULT_THREAD_COUNT);
 
 const value = await threadForge.runFunction(
   'task-id',
@@ -104,6 +104,20 @@ await threadForge.shutdown();
 2. Provide a unique string id for each task
 3. Your function must be serializable (no closures over non-serializable values)
 4. Set `fn.__threadforgeSource` for production builds
+5. Override progress throttling by passing `{ progressThrottleMs: number }` to `initialize`
+
+### Configuration via environment variables
+
+ThreadForge reads optional environment variables at load time so you can tune behaviour without
+changing source code. Use a library such as [`react-native-config`](https://github.com/luggit/react-native-config)
+to provide them at build time.
+
+| Variable | Description | Default |
+| --- | --- | --- |
+| `THREADFORGE_DEFAULT_THREAD_COUNT` | Number of worker threads to start when `threadForge.initialize` is called without an explicit value. | `4` |
+| `THREADFORGE_PROGRESS_THROTTLE_MS` | Minimum interval (in milliseconds) between progress updates emitted from native workers. | `100` |
+
+Invalid or missing values automatically fall back to the defaults listed above.
 
 ---
 
@@ -370,7 +384,7 @@ const data = await threadForge.runFunction('stats', fetchStats);
 ### 1. **Optimal Thread Count**
 ```tsx
 // Start with 2-4 threads, adjust based on device
-threadForge.initialize(4);
+threadForge.initialize(DEFAULT_THREAD_COUNT);
 ```
 
 ### 2. **Chunk Large Datasets**

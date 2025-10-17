@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import {
+  DEFAULT_THREAD_COUNT,
   threadForge,
   TaskPriority,
   ThreadForgeCancelledError,
@@ -154,7 +155,7 @@ const App: React.FC = () => {
 
     const initialize = async () => {
       try {
-        await threadForge.initialize(4);
+        await threadForge.initialize(DEFAULT_THREAD_COUNT);
         if (!mounted) {
           return;
         }

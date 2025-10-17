@@ -125,4 +125,14 @@ describe('threadForge', () => {
     expect(pkg.version).toBe('1.1.0');
     expect(pkg.author).toBe('Abhishek Kumar (alexrus28996)');
   });
+
+  it('sanitizes initialization parameters before delegating to native code', async () => {
+    await threadForge.shutdown();
+    NativeModules.ThreadForge.initialize.mockClear();
+
+    // @ts-expect-error intentionally pass invalid values to validate sanitization
+    await threadForge.initialize(Number.NaN, { progressThrottleMs: -10 });
+
+    expect(NativeModules.ThreadForge.initialize).toHaveBeenCalledWith(4, 0);
+  });
 });
