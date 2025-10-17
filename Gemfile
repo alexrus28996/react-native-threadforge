@@ -6,3 +6,5 @@ ruby ">= 2.6.10"
 # Exclude problematic versions of cocoapods and activesupport that causes build failures.
 gem 'cocoapods', '>= 1.13', '!= 1.15.0', '!= 1.15.1'
 gem 'activesupport', '>= 6.1.7.5', '!= 7.1.0'
+# `ffi` 1.16+ ships universal binaries that work on Apple Silicon without requiring Rosetta.
+gem 'ffi', '>= 1.16.3'
