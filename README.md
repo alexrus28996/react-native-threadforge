@@ -10,6 +10,10 @@ ThreadForge is a React Native playground that demonstrates how to move CPU-heavy
   <img src="./docs/assets/threadforge-demo.svg" alt="ThreadForge demo screen" width="360" />
 </p>
 
+<p align="center">
+  <img src="./docs/assets/threadforge-demo.gif" alt="Animated ThreadForge walkthrough" width="360" />
+</p>
+
 > 🖼️ Want the actual assets? They live in [`docs/assets`](./docs/assets). Swap them in your presentations or README forks as you wish.
 
 ## Project Overview
