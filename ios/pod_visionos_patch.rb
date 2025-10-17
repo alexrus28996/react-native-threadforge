@@ -21,8 +21,7 @@ module Pod
     # call to the iOS proxy so CocoaPods can continue resolving dependencies
     # without understanding the new platform.
     def visionos
-      Pod::UI.warn('CocoaPods 1.13+ is recommended for visionOS support. '
-                   'Falling back to iOS configuration for compatibility.')
+      Pod::UI.warn('CocoaPods 1.13+ is recommended for visionOS support. Falling back to iOS configuration for compatibility.')
       ios
     end
   end
