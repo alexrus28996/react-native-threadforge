@@ -1,6 +1,16 @@
 # ThreadForge Demo App & Library
 
+<p align="center">
+  <img src="./docs/assets/threadforge-logo.svg" alt="React Native ThreadForge logo" width="640" />
+</p>
+
 ThreadForge is a React Native playground that demonstrates how to move CPU-heavy JavaScript work onto native thread pools while keeping the UI smooth. The repository ships both a polished demo application and the reusable `react-native-threadforge` library that powers it.
+
+<p align="center">
+  <img src="./docs/assets/threadforge-demo.svg" alt="ThreadForge demo screen" width="360" />
+</p>
+
+> 🖼️ Want the actual assets? They live in [`docs/assets`](./docs/assets). Swap them in your presentations or README forks as you wish.
 
 ## Project Overview
 
@@ -43,6 +53,7 @@ ThreadForge is a React Native playground that demonstrates how to move CPU-heavy
 - [Advanced Patterns](#advanced-patterns)
 - [API Reference](#api-reference)
 - [Contribution Guidelines](#contribution-guidelines)
+- [Brand & Media Assets](#brand--media-assets)
 
 ## Quick Start
 
@@ -385,4 +396,10 @@ threadForge.shutdown(): void
 
 ### Code of Conduct
 We follow the [React Native Code of Conduct](https://reactnative.dev/code-of-conduct). Be respectful, inclusive, and constructive in all project spaces.
+
+## Brand & Media Assets
+- **Logo:** [`docs/assets/threadforge-logo.svg`](./docs/assets/threadforge-logo.svg)
+- **Demo Screenshot:** [`docs/assets/threadforge-demo.svg`](./docs/assets/threadforge-demo.svg)
+
+Include either image in blogs, decks, and READMEs to quickly explain what ThreadForge looks like.
 
