@@ -1,10 +1,8 @@
 # react-native-threadforge
 
-A tiny helper that lets React Native apps run real JavaScript functions on background threads. Pass a
-serializable function to `threadForge.runFunction`, keep the UI responsive, and receive results back as
-promises.
+A powerful library that enables React Native apps to run JavaScript functions on background threads. Pass serializable functions to `threadForge.runFunction`, keep your UI responsive, and receive results back as promises.
 
-This README is intentionally simple so you can copy-paste the snippets straight into your project.
+This README provides practical examples you can copy-paste directly into your project.
 
 ---
 
@@ -19,12 +17,11 @@ yarn add react-native-threadforge
 cd ios && pod install
 ```
 
-ThreadForge works with the default Hermes engine on React Native 0.73+. No manual native changes are
-required.
+ThreadForge works seamlessly with Hermes engine on React Native 0.73+. No manual native changes are required. The library automatically creates a Hermes runtime to execute background work.
 
 ---
 
-## Quick start (copy/paste)
+## Quick Start (Copy/Paste Ready)
 
 ```tsx
 import React, { useEffect, useState } from 'react';
@@ -78,7 +75,7 @@ export default function Example() {
 
 ---
 
-## Core API recap
+## Core API
 
 ```ts
 import { threadForge, TaskPriority } from 'react-native-threadforge';
@@ -100,19 +97,17 @@ const stats = await threadForge.getStats();
 await threadForge.shutdown();
 ```
 
-Things to remember:
-
-1. Call `threadForge.initialize()` before using any other method.
-2. Provide a unique string id for each task.
-3. Your function must be serializable (no closures over non-serializable values).
-4. Hermes strips source code in release builds, so set `fn.__threadforgeSource` when bundling for
-   production.
+**Key Points:**
+1. Call `threadForge.initialize()` before using any other method
+2. Provide a unique string id for each task
+3. Your function must be serializable (no closures over non-serializable values)
+4. Set `fn.__threadforgeSource` for production builds
 
 ---
 
-## Extra usage patterns
+## Advanced Usage Patterns
 
-### Group multiple jobs
+### Parallel Job Execution
 
 ```ts
 await Promise.all(
@@ -134,7 +129,7 @@ await Promise.all(
 );
 ```
 
-### Cancel when a screen unmounts
+### Task Cancellation
 
 ```tsx
 useEffect(() => {
@@ -145,138 +140,212 @@ useEffect(() => {
 }, []);
 ```
 
-## 🗄️ SQLite heavy operations
+### Progress Tracking
 
-ThreadForge shines when you need to crunch large SQLite result sets without blocking your UI. The demo
-application ships with [`createSqliteHeavyOperationsTask`](../../src/tasks/sqlite.ts), which synthesizes
-120k order rows, groups them by category and sales segment, and returns a formatted analytics summary.
-The app also includes a dedicated **SQLite Bulk Insert** screen that opens a database with
-[`react-native-sqlite-storage`](https://github.com/andpor/react-native-sqlite-storage), generates row
-batches via `createSqliteOrderBatchTask`, and persists the data before running SQL summaries.
+```tsx
+useEffect(() => {
+  const subscription = threadForge.onProgress((taskId, progress) => {
+    if (taskId === 'my-task') {
+      setProgress(progress);
+    }
+  });
+  return () => subscription.remove();
+}, []);
+```
+
+## 🗄️ Database Operations
+
+ThreadForge excels at processing large SQLite datasets without blocking your UI. Here are practical examples:
+
+### SQLite Data Processing
 
 ```tsx
 import { threadForge, TaskPriority } from 'react-native-threadforge';
-import { createSqliteHeavyOperationsTask } from '../src/tasks/sqlite';
+import SQLite from 'react-native-sqlite-2'; // Modern SQLite library
 
-await threadForge.initialize(4);
-
-const metrics = await threadForge.runFunction(
-  'sqlite-analytics',
-  createSqliteHeavyOperationsTask(),
-  TaskPriority.HIGH,
-);
-
-console.log(metrics);
-```
-
-The snippet below mirrors the code behind the new demo screen. Each batch of rows is generated on a
-background thread, inserted via native SQL, then summarized with follow-up queries:
-
-```ts
-import SQLite from 'react-native-sqlite-storage';
-import { threadForge, TaskPriority } from 'react-native-threadforge';
-import { createSqliteOrderBatchTask } from '../../src/tasks/sqlite';
-
-const db = await SQLite.openDatabase({ name: 'threadforge-demo.db', location: 'default' });
-await db.executeSql('DROP TABLE IF EXISTS orders');
-await db.executeSql(
-  'CREATE TABLE IF NOT EXISTS orders (orderId INTEGER PRIMARY KEY, customerId INTEGER, category TEXT, segment TEXT, createdMonth INTEGER, amount REAL, margin REAL)',
-);
-
-for (let batchIndex = 0; batchIndex < 20; batchIndex++) {
-  const rows = await threadForge.runFunction(
-    `sqlite-batch-${batchIndex}`,
-    createSqliteOrderBatchTask({ batchSize: 500, batchIndex, totalBatches: 20 }),
-    TaskPriority.HIGH,
-  );
-
-  await new Promise<void>((resolve, reject) => {
-    db.transaction(
-      (tx) => {
-        rows.forEach((row) => {
-          tx.executeSql(
-            'INSERT INTO orders (orderId, customerId, category, segment, createdMonth, amount, margin) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [
-              row.orderId,
-              row.customerId,
-              row.category,
-              row.segment,
-              row.createdMonth,
-              row.amount,
-              row.margin,
-            ],
-          );
-        });
-      },
-      reject,
-      resolve,
-    );
+const processDatabaseData = async () => {
+  // Open database
+  const db = await SQLite.openDatabase({
+    name: 'my-app.db',
+    location: 'default'
   });
-}
 
-const [summaryResult] = await db.executeSql(
-  'SELECT COUNT(*) as totalRows, SUM(amount) as revenue, SUM(margin) as margin FROM orders',
-);
-console.log(summaryResult.rows.item(0));
-```
+  // Create table
+  await db.executeSql(`
+    CREATE TABLE IF NOT EXISTS orders (
+      id INTEGER PRIMARY KEY,
+      amount REAL,
+      category TEXT,
+      created_at DATETIME
+    )
+  `);
 
-For production data you can serialize the rows retrieved from `react-native-quick-sqlite`,
-`expo-sqlite`, or any other driver and hydrate them inside a worker. The helper below builds a release
-safe worker from dynamic rows by setting the optional `__threadforgeSource` property.
-
-```ts
-type SQLiteRow = { category: string; total: number };
-
-const buildSqliteWorker = (rows: SQLiteRow[]) => {
-  const json = JSON.stringify(rows);
-  const escaped = json.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  const worker: (() => string) & { __threadforgeSource?: string } = () => {
-    const rowsData = JSON.parse(json);
-    const totals = new Map<string, number>();
-    for (const row of rowsData) {
-      const amount = Number(row.total) || 0;
-      const key = row.category ?? 'uncategorized';
-      totals.set(key, (totals.get(key) ?? 0) + amount);
+  // Generate data on background thread
+  const generateOrders = () => {
+    const orders = [];
+    for (let i = 0; i < 10000; i++) {
+      orders.push({
+        amount: Math.random() * 1000,
+        category: ['Electronics', 'Books', 'Clothing'][Math.floor(Math.random() * 3)],
+        created_at: new Date().toISOString()
+      });
+      if (i % 1000 === 0) {
+        reportProgress(i / 10000);
+      }
     }
-    const sorted = Array.from(totals.entries()).sort((a, b) => b[1] - a[1]);
-    return sorted
-      .slice(0, 5)
-      .map(([name, value]) => `${name}: $${value.toFixed(0)}`)
-      .join(', ');
+    return orders;
   };
 
-  Object.defineProperty(worker, '__threadforgeSource', {
-    value: [
-      '() => {',
-      `  const rowsData = JSON.parse('${escaped}');`,
-      '  const totals = new Map();',
-      '  for (const row of rowsData) {',
-      "    const amount = Number(row.total) || 0;",
-      "    const key = row.category ?? 'uncategorized';",
-      '    totals.set(key, (totals.get(key) ?? 0) + amount);',
-      '  }',
-      '  const sorted = Array.from(totals.entries()).sort((a, b) => b[1] - a[1]);',
-      "  return sorted.slice(0, 5).map(([name, value]) => `${name}: $${value.toFixed(0)}`).join(', ');",
-      '}',
-    ].join('\n'),
+  Object.defineProperty(generateOrders, '__threadforgeSource', { 
+    value: generateOrders.toString() 
   });
 
-  return worker;
-};
+  const orders = await threadForge.runFunction('generate-orders', generateOrders, TaskPriority.HIGH);
 
-const rows = await quickSQLite.executeAsync('SELECT category, total FROM orders'); // your SQLite client
-const summary = await threadForge.runFunction('sqlite-top-categories', buildSqliteWorker(rows));
+  // Insert data in batches
+  await db.transaction(async (tx) => {
+    for (const order of orders) {
+      await tx.executeSql(
+        'INSERT INTO orders (amount, category, created_at) VALUES (?, ?, ?)',
+        [order.amount, order.category, order.created_at]
+      );
+    }
+  });
+
+  // Analyze data on background thread
+  const analyzeData = () => {
+    const categories = new Map();
+    let total = 0;
+    
+    for (const order of orders) {
+      total += order.amount;
+      categories.set(order.category, (categories.get(order.category) || 0) + 1);
+    }
+    
+    return {
+      totalOrders: orders.length,
+      totalRevenue: total,
+      categoryBreakdown: Object.fromEntries(categories)
+    };
+  };
+
+  Object.defineProperty(analyzeData, '__threadforgeSource', { 
+    value: analyzeData.toString() 
+  });
+
+  const analytics = await threadForge.runFunction('analyze-data', analyzeData, TaskPriority.HIGH);
+  
+  return analytics;
+};
 ```
 
-## 🧱 Hermes release builds
+### Bulk Data Insertion
 
-Hermes omits JavaScript source code when you create bytecode-only bundles (the default for release
-builds). In that mode `fn.toString()` returns a placeholder like `[bytecode]`, which ThreadForge cannot
-reconstruct into executable source for the background runtime. When this happens, `runFunction()` throws
-with a detailed error.
+```tsx
+const bulkInsertOrders = async (orderData: any[]) => {
+  const db = await SQLite.openDatabase({ name: 'orders.db', location: 'default' });
+  
+  // Process data in chunks
+  const chunkSize = 500;
+  const chunks = [];
+  
+  for (let i = 0; i < orderData.length; i += chunkSize) {
+    chunks.push(orderData.slice(i, i + chunkSize));
+  }
+  
+  // Insert each chunk
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    
+    await db.transaction(async (tx) => {
+      for (const order of chunk) {
+        await tx.executeSql(
+          'INSERT INTO orders (id, amount, category) VALUES (?, ?, ?)',
+          [order.id, order.amount, order.category]
+        );
+      }
+    });
+    
+    // Report progress
+    console.log(`Inserted chunk ${i + 1}/${chunks.length}`);
+  }
+};
+```
 
-To keep using ThreadForge in release, provide the original function source via the optional
-`__threadforgeSource` property before scheduling the task:
+### Data Analytics
+
+```tsx
+const performDataAnalytics = async (data: any[]) => {
+  const analytics = () => {
+    const stats = {
+      total: data.length,
+      categories: new Map(),
+      sum: 0,
+      average: 0,
+      topCategories: []
+    };
+    
+    for (let i = 0; i < data.length; i++) {
+      const item = data[i];
+      stats.sum += item.value;
+      stats.categories.set(item.category, (stats.categories.get(item.category) || 0) + 1);
+      
+      if (i % 1000 === 0) {
+        reportProgress(i / data.length);
+      }
+    }
+    
+    stats.average = stats.sum / stats.total;
+    stats.topCategories = Array.from(stats.categories.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
+    
+    return stats;
+  };
+  
+  Object.defineProperty(analytics, '__threadforgeSource', { 
+    value: analytics.toString() 
+  });
+  
+  return await threadForge.runFunction('data-analytics', analytics, TaskPriority.HIGH);
+};
+```
+
+## 🖼️ Image Processing
+
+```tsx
+const processImages = async (imagePaths: string[]) => {
+  const processImage = (path: string) => {
+    // Simulate heavy image processing
+    const startTime = Date.now();
+    while (Date.now() - startTime < 2000) {
+      // Image processing work
+    }
+    return { 
+      path, 
+      processed: true, 
+      size: Math.random() * 1000000,
+      timestamp: new Date().toISOString()
+    };
+  };
+  
+  Object.defineProperty(processImage, '__threadforgeSource', { 
+    value: processImage.toString() 
+  });
+  
+  const results = await Promise.all(
+    imagePaths.map((path, index) => 
+      threadForge.runFunction(`image-${index}`, () => processImage(path), TaskPriority.NORMAL)
+    )
+  );
+  
+  return results;
+};
+```
+
+## 🧱 Production Builds
+
+For production builds, provide the original function source via `__threadforgeSource`:
 
 ```ts
 type WorkerFn<T> = (() => T) & { __threadforgeSource?: string };
@@ -294,19 +363,57 @@ const fetchStats = makeWorker(() => {
 const data = await threadForge.runFunction('stats', fetchStats);
 ```
 
----
+## 📊 Performance Tips
 
-## Troubleshooting
+### 1. **Optimal Thread Count**
+```tsx
+// Start with 2-4 threads, adjust based on device
+threadForge.initialize(4);
+```
 
-| Issue | Fix |
-| --- | --- |
-| `ThreadForge has not been initialized` | Call `threadForge.initialize()` before using any other method. |
-| No progress events | Subscribe after initialization and ensure your worker calls `reportProgress`. |
-| Release build throws serialization error | Provide `fn.__threadforgeSource` so the engine has the original source text. |
-| Native build failure on Android | Run `cd android && ./gradlew clean` to rebuild the shared library. |
+### 2. **Chunk Large Datasets**
+```tsx
+const processLargeDataset = async (data: any[]) => {
+  const chunkSize = 1000;
+  const chunks = [];
+  
+  for (let i = 0; i < data.length; i += chunkSize) {
+    chunks.push(data.slice(i, i + chunkSize));
+  }
+  
+  const results = await Promise.all(
+    chunks.map((chunk, index) => 
+      threadForge.runFunction(`chunk-${index}`, () => processChunk(chunk))
+    )
+  );
+  
+  return results.flat();
+};
+```
 
----
+### 3. **Progress Reporting**
+```tsx
+const processWithProgress = () => {
+  for (let i = 0; i < 1000000; i++) {
+    // Heavy work
+    if (i % 10000 === 0) {
+      reportProgress(i / 1000000);
+    }
+  }
+  reportProgress(1);
+  return 'completed';
+};
+```
 
-## License
+## 🔧 Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| `ThreadForge has not been initialized` | Call `threadForge.initialize()` before using any other method |
+| No progress events | Subscribe after initialization and ensure your worker calls `reportProgress` |
+| Release build throws serialization error | Provide `fn.__threadforgeSource` so the engine has the original source text |
+| Native build failure on Android | Run `cd android && ./gradlew clean` to rebuild the shared library |
+
+## 📄 License
 
 MIT © Abhishek Kumar (alexrus28996)

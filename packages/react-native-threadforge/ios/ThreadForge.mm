@@ -71,10 +71,10 @@ RCT_EXPORT_MODULE()
 }
 
 - (void)startObserving {
-  __weak typeof(self) weakSelf = self;
+  __weak __typeof(self) weakSelf = self;
   std::lock_guard<std::mutex> lock(gMutex);
   gProgressEmitter = [weakSelf](const std::string &taskId, double progress) {
-    __strong typeof(weakSelf) strongSelf = weakSelf;
+    __typeof(self) strongSelf = weakSelf;
     if (!strongSelf) {
       return;
     }

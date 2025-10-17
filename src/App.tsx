@@ -19,10 +19,8 @@ import { createTimerTask } from './tasks/timer';
 import { createInstantMessageTask } from './tasks/instantMessage';
 import { createImageProcessingTask } from './tasks/imageProcessing';
 import { createAnalyticsTask } from './tasks/analytics';
-import { createSqliteHeavyOperationsTask } from './tasks/sqlite';
 import { ThreadTask } from './tasks/threadHelpers';
 import { showAlert } from './utils/showAlert';
-import SqliteBulkInsertScreen from './screens/SqliteBulkInsertScreen';
 
 type TaskStatus = 'pending' | 'done' | 'cancelled' | 'error';
 
@@ -46,7 +44,6 @@ const App: React.FC = () => {
   const [progress, setProgress] = useState<ProgressMap>({});
   const [uiCounter, setUiCounter] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [activeScreen, setActiveScreen] = useState<'home' | 'sqlite'>('home');
   const counterInterval = useRef<NodeJS.Timeout | null>(null);
   const statsInterval = useRef<NodeJS.Timeout | null>(null);
   const progressSubscription = useRef<ProgressSubscription>(null);
@@ -57,7 +54,7 @@ const App: React.FC = () => {
       const nextStats = await threadForge.getStats();
       setStats(nextStats);
     } catch (error) {
-      // Ignore transient native errors; stats will be refreshed on the next interval.
+      console.warn('[ThreadForgeDemo] Unable to fetch stats', error);
     }
   }, []);
 
@@ -125,9 +122,7 @@ const App: React.FC = () => {
     setLoading(true);
     try {
       const results = await Promise.all(
-        jobs.map(({ id, task }) => {
-          return threadForge.runFunction(id, task, TaskPriority.NORMAL);
-        }),
+        jobs.map(({ id, task }) => threadForge.runFunction(id, task, TaskPriority.NORMAL)),
       );
       results.forEach((result, index) => {
         const { id } = jobs[index]!;
@@ -176,30 +171,20 @@ const App: React.FC = () => {
 
     initialize();
 
-    counterInterval.current = setInterval(() => {
-      setUiCounter((value) => (value + 1) % 10_000);
-    }, 200);
-
+    counterInterval.current = setInterval(
+      () => setUiCounter((value) => (value + 1) % 10_000),
+      200,
+    );
     statsInterval.current = setInterval(updateStats, 1_000);
 
     return () => {
       mounted = false;
-      if (counterInterval.current) {
-        clearInterval(counterInterval.current);
-      }
-      if (statsInterval.current) {
-        clearInterval(statsInterval.current);
-      }
-      if (progressSubscription.current) {
-        progressSubscription.current.remove();
-      }
-      void threadForge.shutdown();
+      counterInterval.current && clearInterval(counterInterval.current);
+      statsInterval.current && clearInterval(statsInterval.current);
+      progressSubscription.current?.remove();
+      threadForge.shutdown();
     };
   }, [isTestEnv, updateStats]);
-
-  if (activeScreen === 'sqlite') {
-    return <SqliteBulkInsertScreen onBack={() => setActiveScreen('home')} />;
-  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -255,26 +240,6 @@ const App: React.FC = () => {
             }}
           >
             <Text style={styles.buttonText}>Image Processing & Analytics</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.button, styles.buttonTeal]}
-            onPress={() =>
-              runBackgroundTask(
-                'SQLiteReport',
-                createSqliteHeavyOperationsTask(),
-                TaskPriority.HIGH,
-              )
-            }
-          >
-            <Text style={styles.buttonText}>SQLite Analytics Batch</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.button, styles.buttonIndigo]}
-            onPress={() => setActiveScreen('sqlite')}
-          >
-            <Text style={styles.buttonText}>Open SQLite Bulk Insert Demo</Text>
           </TouchableOpacity>
         </View>
 
@@ -367,12 +332,6 @@ const styles = StyleSheet.create({
   },
   buttonPurple: {
     backgroundColor: '#a855f7',
-  },
-  buttonTeal: {
-    backgroundColor: '#14b8a6',
-  },
-  buttonIndigo: {
-    backgroundColor: '#6366f1',
   },
   taskList: {
     backgroundColor: '#111c34',
