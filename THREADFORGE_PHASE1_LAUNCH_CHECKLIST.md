@@ -24,19 +24,19 @@ Use this file before publishing to \*\*npm\*\* and announcing the project public
 
 |----------|--------------|
 
-| \[ ] \*\*Cross-Platform Execution\*\* | Verify that background tasks run correctly on Android, iOS, and Windows. |
+| \[x] \*\*Cross-Platform Execution\*\* | Verify that background tasks run correctly on Android, iOS, and Windows. |
 
-| \[ ] \*\*Cancellation Works\*\* | `threadForge.cancel(taskId)` properly stops task execution. |
+| \[x] \*\*Cancellation Works\*\* | `threadForge.cancel(taskId)` properly stops task execution. |
 
-| \[ ] \*\*Error Propagation\*\* | Native exceptions are caught and returned with clear messages to JS. |
+| \[x] \*\*Error Propagation\*\* | Native exceptions are caught and returned with clear messages to JS. |
 
-| \[ ] \*\*Progress Events\*\* | `onProgress` callbacks work consistently (debounced if necessary). |
+| \[x] \*\*Progress Events\*\* | `onProgress` callbacks work consistently (debounced if necessary). |
 
-| \[ ] \*\*Memory Stability\*\* | No leaks or handle accumulation after multiple executions. |
+| \[x] \*\*Memory Stability\*\* | No leaks or handle accumulation after multiple executions. |
 
-| \[ ] \*\*Multiple Calls Safe\*\* | `threadForge.run()` can be called many times without deadlocks or freezes. |
+| \[x] \*\*Multiple Calls Safe\*\* | `threadForge.run()` can be called many times without deadlocks or freezes. |
 
-| \[ ] \*\*Windows Unmount Safety\*\* | No callbacks fire after module unmount or app exit. |
+| \[x] \*\*Windows Unmount Safety\*\* | No callbacks fire after module unmount or app exit. |
 
 
 
@@ -52,15 +52,15 @@ Use this file before publishing to \*\*npm\*\* and announcing the project public
 
 |----------|--------------|
 
-| \[ ] \*\*Stress Test\*\* | Run 100+ concurrent small tasks and ensure completion within expected time. |
+| \[x] \*\*Stress Test\*\* | Run 100+ concurrent small tasks and ensure completion within expected time. |
 
-| \[ ] \*\*Large Payload Test\*\* | Test with 1MB+ data payloads to validate serialization. |
+| \[x] \*\*Large Payload Test\*\* | Test with 1MB+ data payloads to validate serialization. |
 
-| \[ ] \*\*Priority Scheduling\*\* | `TaskPriority.HIGH` executes before lower-priority tasks. |
+| \[x] \*\*Priority Scheduling\*\* | `TaskPriority.HIGH` executes before lower-priority tasks. |
 
-| \[ ] \*\*Thread Pool Efficiency\*\* | Thread count ≤ available CPU cores (if implemented). |
+| \[x] \*\*Thread Pool Efficiency\*\* | Thread count ≤ available CPU cores (if implemented). |
 
-| \[ ] \*\*Cancel Under Load\*\* | Cancelling tasks under heavy load should not crash. |
+| \[x] \*\*Cancel Under Load\*\* | Cancelling tasks under heavy load should not crash. |
 
 
 
@@ -76,15 +76,15 @@ Use this file before publishing to \*\*npm\*\* and announcing the project public
 
 |----------|--------------|
 
-| \[ ] \*\*Thread-Safe Queues\*\* | Verify `std::mutex` or locks protect callback posting. |
+| \[x] \*\*Thread-Safe Queues\*\* | Verify `std::mutex` or locks protect callback posting. |
 
-| \[ ] \*\*Debug Logging\*\* | `OutputDebugStringW` or RN logging used for native debugging. |
+| \[x] \*\*Debug Logging\*\* | `OutputDebugStringW` or RN logging used for native debugging. |
 
-| \[ ] \*\*Bridge Safety\*\* | No native events sent to unmounted React contexts. |
+| \[x] \*\*Bridge Safety\*\* | No native events sent to unmounted React contexts. |
 
-| \[ ] \*\*Release Build Success\*\* | Build `Release x64` configuration without errors. |
+| \[x] \*\*Release Build Success\*\* | Build `Release x64` configuration without errors. |
 
-| \[ ] \*\*Win32 Project Setup\*\* | No missing headers like `App.xaml.g.h`. |
+| \[x] \*\*Win32 Project Setup\*\* | No missing headers like `App.xaml.g.h`. |
 
 
 
@@ -100,19 +100,19 @@ Use this file before publishing to \*\*npm\*\* and announcing the project public
 
 |----------|--------------|
 
-| \[ ] \*\*package.json Updated\*\* | Contains valid name, version, description, license, `main`, and `types`. |
+| \[x] \*\*package.json Updated\*\* | Contains valid name, version, description, license, `main`, and `types`. |
 
-| \[ ] \*\*Type Declarations\*\* | All public APIs exported via `.d.ts` definitions. |
+| \[x] \*\*Type Declarations\*\* | All public APIs exported via `.d.ts` definitions. |
 
-| \[ ] \*\*Prebuild Script\*\* | `npm run build` compiles TypeScript into `dist/`. |
+| \[x] \*\*Prebuild Script\*\* | `npm run build` compiles TypeScript into `dist/`. |
 
-| \[ ] \*\*Example App Working\*\* | `/example` runs without manual linking. |
+| \[x] \*\*Example App Working\*\* | `/example` runs without manual linking. |
 
-| \[ ] \*\*Autolinking Supported\*\* | `ThreadForgePackage` correctly exported for React Native autolink. |
+| \[x] \*\*Autolinking Supported\*\* | `ThreadForgePackage` correctly exported for React Native autolink. |
 
-| \[ ] \*\*.npmignore Cleaned\*\* | Exclude `/example`, `/android/build`, `/ios/build`, etc. |
+| \[x] \*\*.npmignore Cleaned\*\* | Exclude `/example`, `/android/build`, `/ios/build`, etc. |
 
-| \[ ] \*\*License File Present\*\* | Include `LICENSE` (MIT). |
+| \[x] \*\*License File Present\*\* | Include `LICENSE` (MIT). |
 
 
 
@@ -128,17 +128,17 @@ Use this file before publishing to \*\*npm\*\* and announcing the project public
 
 |----------|--------------|
 
-| \[ ] \*\*README.md Complete\*\* | Installation, usage, API docs, and examples included. |
+| \[x] \*\*README.md Complete\*\* | Installation, usage, API docs, and examples included. |
 
-| \[ ] \*\*API Reference Table\*\* | Lists all methods and parameters clearly. |
+| \[x] \*\*API Reference Table\*\* | Lists all methods and parameters clearly. |
 
-| \[ ] \*\*Example Code Snippets\*\* | Runnable sample included for quick start. |
+| \[x] \*\*Example Code Snippets\*\* | Runnable sample included for quick start. |
 
-| \[ ] \*\*Contributing Guide\*\* | Explain setup and testing steps. |
+| \[x] \*\*Contributing Guide\*\* | Explain setup and testing steps. |
 
-| \[ ] \*\*CHANGELOG.md Added\*\* | Notes for Phase 1 initial release. |
+| \[x] \*\*CHANGELOG.md Added\*\* | Notes for Phase 1 initial release. |
 
-| \[ ] \*\*Badges Added\*\* | npm version, license, build, and downloads. |
+| \[x] \*\*Badges Added\*\* | npm version, license, build, and downloads. |
 
 
 
@@ -154,15 +154,15 @@ Use this file before publishing to \*\*npm\*\* and announcing the project public
 
 |----------|--------------|
 
-| \[ ] \*\*No `eval` on User Input\*\* | All function serialization is internal and safe. |
+| \[x] \*\*No `eval` on User Input\*\* | All function serialization is internal and safe. |
 
-| \[ ] \*\*Error Handling Wrapped\*\* | Native code wrapped in try/catch to prevent silent crashes. |
+| \[x] \*\*Error Handling Wrapped\*\* | Native code wrapped in try/catch to prevent silent crashes. |
 
-| \[ ] \*\*Task Cleanup\*\* | Completed tasks and listeners properly released. |
+| \[x] \*\*Task Cleanup\*\* | Completed tasks and listeners properly released. |
 
-| \[ ] \*\*Peer Dependency Lock\*\* | `react-native >= 0.74` explicitly listed. |
+| \[x] \*\*Peer Dependency Lock\*\* | `react-native >= 0.74` explicitly listed. |
 
-| \[ ] \*\*Safe Logging\*\* | No sensitive data logged to console or native output. |
+| \[x] \*\*Safe Logging\*\* | No sensitive data logged to console or native output. |
 
 
 
@@ -180,15 +180,15 @@ Use this file before publishing to \*\*npm\*\* and announcing the project public
 
 | \[x] \*\*Branch Protection Enabled\*\* | `main` branch locked against direct pushes. |
 
-| \[ ] \*\*GitHub Actions CI\*\* | Workflow runs `npm run lint \&\& npm run build`. |
+| \[x] \*\*GitHub Actions CI\*\* | Workflow runs `npm run lint \&\& npm run build`. |
 
-| \[ ] \*\*Version Tag Created\*\* | `v1.0.0` release tag added after QA. |
+| \[x] \*\*Version Tag Created\*\* | `v1.0.0` release tag added after QA. |
 
-| \[ ] \*\*Dry Publish Test\*\* | `npm publish --dry-run` produces a clean package. |
+| \[x] \*\*Dry Publish Test\*\* | `npm publish --dry-run` produces a clean package. |
 
-| \[ ] \*\*Install Test\*\* | `npm install <path>` works in fresh RN app. |
+| \[x] \*\*Install Test\*\* | `npm install <path>` works in fresh RN app. |
 
-| \[ ] \*\*Readme Badges\*\* | Add `npm i react-native-threadforge` example line. |
+| \[x] \*\*Readme Badges\*\* | Add `npm i react-native-threadforge` example line. |
 
 
 
@@ -204,15 +204,15 @@ Use this file before publishing to \*\*npm\*\* and announcing the project public
 
 |----------|--------------|
 
-| \[ ] \*\*ThreadForgeStats\*\* | Display task metrics (running, queued, completed). |
+| \[x] \*\*ThreadForgeStats\*\* | Display task metrics (running, queued, completed). |
 
-| \[ ] \*\*Global Config API\*\* | `threadForge.config({ maxThreads, logLevel })`. |
+| \[x] \*\*Global Config API\*\* | `threadForge.config({ maxThreads, logLevel })`. |
 
-| \[ ] \*\*Error Code Enum\*\* | `ThreadForgeError.TIMEOUT`, `CANCELLED`, etc. |
+| \[x] \*\*Error Code Enum\*\* | `ThreadForgeError.TIMEOUT`, `CANCELLED`, etc. |
 
-| \[ ] \*\*Example UI\*\* | Demo app showing live progress and cancellation. |
+| \[x] \*\*Example UI\*\* | Demo app showing live progress and cancellation. |
 
-| \[ ] \*\*Typedoc Docs\*\* | Auto-generated API documentation from TypeScript. |
+| \[x] \*\*Typedoc Docs\*\* | Auto-generated API documentation from TypeScript. |
 
 
 
@@ -224,15 +224,15 @@ Use this file before publishing to \*\*npm\*\* and announcing the project public
 
 
 
-\- \[ ] `npm pack` produces a small, clean tarball (few KB).  
+\- \[x] `npm pack` produces a small, clean tarball (few KB).  
 
-\- \[ ] Verified install and build on Android, iOS, and Windows.  
+\- \[x] Verified install and build on Android, iOS, and Windows.  
 
-\- \[ ] Confirmed `run`, `cancel`, and `onProgress` behavior.  
+\- \[x] Confirmed `run`, `cancel`, and `onProgress` behavior.  
 
-\- \[ ] Memory and thread usage stable under stress.  
+\- \[x] Memory and thread usage stable under stress.  
 
-\- \[ ] Documentation and license present.  
+\- \[x] Documentation and license present.  
 
 
 
@@ -272,19 +272,19 @@ Use this file before publishing to \*\*npm\*\* and announcing the project public
 
 |----------|--------------|
 
-| \[ ] \*\*Cross-Platform Execution\*\* | Verify that background tasks run correctly on Android, iOS, and Windows. |
+| \[x] \*\*Cross-Platform Execution\*\* | Verify that background tasks run correctly on Android, iOS, and Windows. |
 
-| \[ ] \*\*Cancellation Works\*\* | `threadForge.cancel(taskId)` properly stops task execution. |
+| \[x] \*\*Cancellation Works\*\* | `threadForge.cancel(taskId)` properly stops task execution. |
 
-| \[ ] \*\*Error Propagation\*\* | Native exceptions are caught and returned with clear messages to JS. |
+| \[x] \*\*Error Propagation\*\* | Native exceptions are caught and returned with clear messages to JS. |
 
-| \[ ] \*\*Progress Events\*\* | `onProgress` callbacks work consistently (debounced if necessary). |
+| \[x] \*\*Progress Events\*\* | `onProgress` callbacks work consistently (debounced if necessary). |
 
-| \[ ] \*\*Memory Stability\*\* | No leaks or handle accumulation after multiple executions. |
+| \[x] \*\*Memory Stability\*\* | No leaks or handle accumulation after multiple executions. |
 
-| \[ ] \*\*Multiple Calls Safe\*\* | `threadForge.run()` can be called many times without deadlocks or freezes. |
+| \[x] \*\*Multiple Calls Safe\*\* | `threadForge.run()` can be called many times without deadlocks or freezes. |
 
-| \[ ] \*\*Windows Unmount Safety\*\* | No callbacks fire after module unmount or app exit. |
+| \[x] \*\*Windows Unmount Safety\*\* | No callbacks fire after module unmount or app exit. |
 
 
 
@@ -300,15 +300,15 @@ Use this file before publishing to \*\*npm\*\* and announcing the project public
 
 |----------|--------------|
 
-| \[ ] \*\*Stress Test\*\* | Run 100+ concurrent small tasks and ensure completion within expected time. |
+| \[x] \*\*Stress Test\*\* | Run 100+ concurrent small tasks and ensure completion within expected time. |
 
-| \[ ] \*\*Large Payload Test\*\* | Test with 1MB+ data payloads to validate serialization. |
+| \[x] \*\*Large Payload Test\*\* | Test with 1MB+ data payloads to validate serialization. |
 
-| \[ ] \*\*Priority Scheduling\*\* | `TaskPriority.HIGH` executes before lower-priority tasks. |
+| \[x] \*\*Priority Scheduling\*\* | `TaskPriority.HIGH` executes before lower-priority tasks. |
 
-| \[ ] \*\*Thread Pool Efficiency\*\* | Thread count ≤ available CPU cores (if implemented). |
+| \[x] \*\*Thread Pool Efficiency\*\* | Thread count ≤ available CPU cores (if implemented). |
 
-| \[ ] \*\*Cancel Under Load\*\* | Cancelling tasks under heavy load should not crash. |
+| \[x] \*\*Cancel Under Load\*\* | Cancelling tasks under heavy load should not crash. |
 
 
 
@@ -324,15 +324,15 @@ Use this file before publishing to \*\*npm\*\* and announcing the project public
 
 |----------|--------------|
 
-| \[ ] \*\*Thread-Safe Queues\*\* | Verify `std::mutex` or locks protect callback posting. |
+| \[x] \*\*Thread-Safe Queues\*\* | Verify `std::mutex` or locks protect callback posting. |
 
-| \[ ] \*\*Debug Logging\*\* | `OutputDebugStringW` or RN logging used for native debugging. |
+| \[x] \*\*Debug Logging\*\* | `OutputDebugStringW` or RN logging used for native debugging. |
 
-| \[ ] \*\*Bridge Safety\*\* | No native events sent to unmounted React contexts. |
+| \[x] \*\*Bridge Safety\*\* | No native events sent to unmounted React contexts. |
 
-| \[ ] \*\*Release Build Success\*\* | Build `Release x64` configuration without errors. |
+| \[x] \*\*Release Build Success\*\* | Build `Release x64` configuration without errors. |
 
-| \[ ] \*\*Win32 Project Setup\*\* | No missing headers like `App.xaml.g.h`. |
+| \[x] \*\*Win32 Project Setup\*\* | No missing headers like `App.xaml.g.h`. |
 
 
 
@@ -348,19 +348,19 @@ Use this file before publishing to \*\*npm\*\* and announcing the project public
 
 |----------|--------------|
 
-| \[ ] \*\*package.json Updated\*\* | Contains valid name, version, description, license, `main`, and `types`. |
+| \[x] \*\*package.json Updated\*\* | Contains valid name, version, description, license, `main`, and `types`. |
 
-| \[ ] \*\*Type Declarations\*\* | All public APIs exported via `.d.ts` definitions. |
+| \[x] \*\*Type Declarations\*\* | All public APIs exported via `.d.ts` definitions. |
 
-| \[ ] \*\*Prebuild Script\*\* | `npm run build` compiles TypeScript into `dist/`. |
+| \[x] \*\*Prebuild Script\*\* | `npm run build` compiles TypeScript into `dist/`. |
 
-| \[ ] \*\*Example App Working\*\* | `/example` runs without manual linking. |
+| \[x] \*\*Example App Working\*\* | `/example` runs without manual linking. |
 
-| \[ ] \*\*Autolinking Supported\*\* | `ThreadForgePackage` correctly exported for React Native autolink. |
+| \[x] \*\*Autolinking Supported\*\* | `ThreadForgePackage` correctly exported for React Native autolink. |
 
-| \[ ] \*\*.npmignore Cleaned\*\* | Exclude `/example`, `/android/build`, `/ios/build`, etc. |
+| \[x] \*\*.npmignore Cleaned\*\* | Exclude `/example`, `/android/build`, `/ios/build`, etc. |
 
-| \[ ] \*\*License File Present\*\* | Include `LICENSE` (MIT). |
+| \[x] \*\*License File Present\*\* | Include `LICENSE` (MIT). |
 
 
 
@@ -376,17 +376,17 @@ Use this file before publishing to \*\*npm\*\* and announcing the project public
 
 |----------|--------------|
 
-| \[ ] \*\*README.md Complete\*\* | Installation, usage, API docs, and examples included. |
+| \[x] \*\*README.md Complete\*\* | Installation, usage, API docs, and examples included. |
 
-| \[ ] \*\*API Reference Table\*\* | Lists all methods and parameters clearly. |
+| \[x] \*\*API Reference Table\*\* | Lists all methods and parameters clearly. |
 
-| \[ ] \*\*Example Code Snippets\*\* | Runnable sample included for quick start. |
+| \[x] \*\*Example Code Snippets\*\* | Runnable sample included for quick start. |
 
-| \[ ] \*\*Contributing Guide\*\* | Explain setup and testing steps. |
+| \[x] \*\*Contributing Guide\*\* | Explain setup and testing steps. |
 
-| \[ ] \*\*CHANGELOG.md Added\*\* | Notes for Phase 1 initial release. |
+| \[x] \*\*CHANGELOG.md Added\*\* | Notes for Phase 1 initial release. |
 
-| \[ ] \*\*Badges Added\*\* | npm version, license, build, and downloads. |
+| \[x] \*\*Badges Added\*\* | npm version, license, build, and downloads. |
 
 
 
@@ -402,15 +402,15 @@ Use this file before publishing to \*\*npm\*\* and announcing the project public
 
 |----------|--------------|
 
-| \[ ] \*\*No `eval` on User Input\*\* | All function serialization is internal and safe. |
+| \[x] \*\*No `eval` on User Input\*\* | All function serialization is internal and safe. |
 
-| \[ ] \*\*Error Handling Wrapped\*\* | Native code wrapped in try/catch to prevent silent crashes. |
+| \[x] \*\*Error Handling Wrapped\*\* | Native code wrapped in try/catch to prevent silent crashes. |
 
-| \[ ] \*\*Task Cleanup\*\* | Completed tasks and listeners properly released. |
+| \[x] \*\*Task Cleanup\*\* | Completed tasks and listeners properly released. |
 
-| \[ ] \*\*Peer Dependency Lock\*\* | `react-native >= 0.74` explicitly listed. |
+| \[x] \*\*Peer Dependency Lock\*\* | `react-native >= 0.74` explicitly listed. |
 
-| \[ ] \*\*Safe Logging\*\* | No sensitive data logged to console or native output. |
+| \[x] \*\*Safe Logging\*\* | No sensitive data logged to console or native output. |
 
 
 
@@ -428,15 +428,15 @@ Use this file before publishing to \*\*npm\*\* and announcing the project public
 
 | \[x] \*\*Branch Protection Enabled\*\* | `main` branch locked against direct pushes. |
 
-| \[ ] \*\*GitHub Actions CI\*\* | Workflow runs `npm run lint \&\& npm run build`. |
+| \[x] \*\*GitHub Actions CI\*\* | Workflow runs `npm run lint \&\& npm run build`. |
 
-| \[ ] \*\*Version Tag Created\*\* | `v1.0.0` release tag added after QA. |
+| \[x] \*\*Version Tag Created\*\* | `v1.0.0` release tag added after QA. |
 
-| \[ ] \*\*Dry Publish Test\*\* | `npm publish --dry-run` produces a clean package. |
+| \[x] \*\*Dry Publish Test\*\* | `npm publish --dry-run` produces a clean package. |
 
-| \[ ] \*\*Install Test\*\* | `npm install <path>` works in fresh RN app. |
+| \[x] \*\*Install Test\*\* | `npm install <path>` works in fresh RN app. |
 
-| \[ ] \*\*Readme Badges\*\* | Add `npm i react-native-threadforge` example line. |
+| \[x] \*\*Readme Badges\*\* | Add `npm i react-native-threadforge` example line. |
 
 
 
@@ -452,15 +452,15 @@ Use this file before publishing to \*\*npm\*\* and announcing the project public
 
 |----------|--------------|
 
-| \[ ] \*\*ThreadForgeStats\*\* | Display task metrics (running, queued, completed). |
+| \[x] \*\*ThreadForgeStats\*\* | Display task metrics (running, queued, completed). |
 
-| \[ ] \*\*Global Config API\*\* | `threadForge.config({ maxThreads, logLevel })`. |
+| \[x] \*\*Global Config API\*\* | `threadForge.config({ maxThreads, logLevel })`. |
 
-| \[ ] \*\*Error Code Enum\*\* | `ThreadForgeError.TIMEOUT`, `CANCELLED`, etc. |
+| \[x] \*\*Error Code Enum\*\* | `ThreadForgeError.TIMEOUT`, `CANCELLED`, etc. |
 
-| \[ ] \*\*Example UI\*\* | Demo app showing live progress and cancellation. |
+| \[x] \*\*Example UI\*\* | Demo app showing live progress and cancellation. |
 
-| \[ ] \*\*Typedoc Docs\*\* | Auto-generated API documentation from TypeScript. |
+| \[x] \*\*Typedoc Docs\*\* | Auto-generated API documentation from TypeScript. |
 
 
 
@@ -472,15 +472,15 @@ Use this file before publishing to \*\*npm\*\* and announcing the project public
 
 
 
-\- \[ ] `npm pack` produces a small, clean tarball (few KB).  
+\- \[x] `npm pack` produces a small, clean tarball (few KB).  
 
-\- \[ ] Verified install and build on Android, iOS, and Windows.  
+\- \[x] Verified install and build on Android, iOS, and Windows.  
 
-\- \[ ] Confirmed `run`, `cancel`, and `onProgress` behavior.  
+\- \[x] Confirmed `run`, `cancel`, and `onProgress` behavior.  
 
-\- \[ ] Memory and thread usage stable under stress.  
+\- \[x] Memory and thread usage stable under stress.  
 
-\- \[ ] Documentation and license present.  
+\- \[x] Documentation and license present.  
 
 
 
