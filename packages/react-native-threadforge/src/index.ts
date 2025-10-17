@@ -42,7 +42,24 @@ type NativeRunFunctionResponse =
   | NativeRunFunctionError
   | NativeRunFunctionCancelled;
 
-const { ThreadForge } = NativeModules as { ThreadForge: NativeThreadForgeModule };
+const rawThreadForge = NativeModules.ThreadForge as NativeThreadForgeModule | undefined;
+
+if (!rawThreadForge) {
+  throw new Error(
+    [
+      'ThreadForge native module was not found.',
+      'Ensure the native library is correctly linked and the application has been rebuilt.',
+    ].join(' '),
+  );
+}
+
+const ThreadForge: NativeThreadForgeModule & Required<
+  Pick<NativeThreadForgeModule, 'addListener' | 'removeListeners'>
+> = {
+  ...rawThreadForge,
+  addListener: rawThreadForge.addListener ?? (() => {}),
+  removeListeners: rawThreadForge.removeListeners ?? (() => {}),
+};
 
 const BYTECODE_PLACEHOLDER = '[bytecode]';
 
@@ -104,8 +121,23 @@ export class ThreadForgeEngine {
 
   onProgress(listener: ThreadForgeProgressListener): EmitterSubscription {
     this.ensureInitialized();
-    return this.emitter.addListener(PROGRESS_EVENT, (event: { taskId: string; progress: number }) => {
-      listener(event.taskId, event.progress);
+    return this.emitter.addListener(PROGRESS_EVENT, (event: unknown) => {
+      if (!event || typeof event !== 'object') {
+        return;
+      }
+
+      const { taskId, progress } = event as { taskId?: unknown; progress?: unknown };
+
+      if (typeof taskId !== 'string') {
+        return;
+      }
+
+      if (typeof progress !== 'number' || !Number.isFinite(progress)) {
+        return;
+      }
+
+      const clampedProgress = Math.min(1, Math.max(0, progress));
+      listener(taskId, clampedProgress);
     });
   }
 
@@ -140,7 +172,10 @@ export class ThreadForgeEngine {
       );
     }
 
-    const payload = await ThreadForge.runFunction(id, priority, serialized);
+    const normalizedPriority = Number.isInteger(priority) ? priority : TaskPriority.NORMAL;
+    const sanitizedPriority = Math.min(Math.max(normalizedPriority, TaskPriority.LOW), TaskPriority.HIGH);
+
+    const payload = await ThreadForge.runFunction(id, sanitizedPriority, serialized);
     const response = parseNativeResponse(payload);
 
     if (response.status === 'ok') {
@@ -160,6 +195,9 @@ export class ThreadForgeEngine {
 
   async cancelTask(id: string): Promise<boolean> {
     this.ensureInitialized();
+    if (typeof id !== 'string' || id.trim().length === 0) {
+      throw new Error('ThreadForge requires a non-empty task id to cancel a task');
+    }
     return ThreadForge.cancelTask(id);
   }
 

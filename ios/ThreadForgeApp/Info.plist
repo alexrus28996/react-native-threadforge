@@ -29,8 +29,8 @@
 	  <!-- Do not change NSAllowsArbitraryLoads to true, or you will risk app rejection! -->
 		<key>NSAllowsArbitraryLoads</key>
 		<false/>
-		<key>NSAllowsLocalNetworking</key>
-		<true/>
+                <key>NSAllowsLocalNetworking</key>
+                <false/>
 	</dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string></string>

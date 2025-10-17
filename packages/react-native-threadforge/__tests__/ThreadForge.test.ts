@@ -130,7 +130,6 @@ describe('threadForge', () => {
     await threadForge.shutdown();
     NativeModules.ThreadForge.initialize.mockClear();
 
-    // @ts-expect-error intentionally pass invalid values to validate sanitization
     await threadForge.initialize(Number.NaN, { progressThrottleMs: -10 });
 
     expect(NativeModules.ThreadForge.initialize).toHaveBeenCalledWith(4, 0);
