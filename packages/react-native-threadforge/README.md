@@ -17,7 +17,9 @@ yarn add react-native-threadforge
 cd ios && pod install
 ```
 
-ThreadForge works seamlessly with Hermes engine on React Native 0.73+. No manual native changes are required. The library automatically creates a Hermes runtime to execute background work.
+ThreadForge works with the default Hermes engine on React Native 0.73+. No manual native changes are
+required. If you disable Hermes for any reason, re-enable it on iOS by keeping `USE_HERMES=1` in your
+`Podfile` (ThreadForge creates a Hermes runtime to execute background work).
 
 ---
 

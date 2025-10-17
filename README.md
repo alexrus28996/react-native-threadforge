@@ -64,18 +64,19 @@ npm run android   # or: npm run ios
    ```bash
    npx pod-install ios
    ```
-   
-   **Apple Silicon Mac Setup:**
+   If you invoke `pod install` manually on Apple Silicon and see an error about `ffi` or `json`
+   extensions being built for `x86_64`, install the arm64-native gems first:
    ```bash
    bundle install
    bundle exec pod install
-   # Alternative: system Ruby
+   # or, if you rely on the system Ruby:
    sudo gem uninstall ffi json
    sudo arch -arm64 gem install ffi:1.16.3 json
    ```
-
-3. **Verify Hermes is enabled** (required for ThreadForge)
-4. **Launch the demo:**
+3. Confirm Hermes is enabled (ThreadForge depends on it for the background runtime). The default
+   React Native template already sets `USE_HERMES=1`, so only change this if you previously disabled
+   Hermes.
+4. Launch the demo application:
    ```bash
    npm start
    npm run ios
