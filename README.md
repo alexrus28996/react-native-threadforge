@@ -87,7 +87,10 @@ cd ios && pod install
    sudo gem uninstall ffi json
    sudo arch -arm64 gem install ffi:1.16.3 json
    ```
-3. Launch the demo application:
+3. Confirm Hermes is enabled (ThreadForge depends on it for the background runtime). The default
+   React Native template already sets `USE_HERMES=1`, so only change this if you previously disabled
+   Hermes.
+4. Launch the demo application:
    ```bash
    npm start
    npm run ios
