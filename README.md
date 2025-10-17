@@ -1,224 +1,116 @@
-# ThreadForge Demo App & Library
+# ThreadForge React Native Showcase
 
-<p align="center">
-  <img src="./docs/assets/threadforge-logo.png" alt="ThreadForge logo" width="520" />
-</p>
+ThreadForge is a React Native learning project that proves how to push CPU-heavy
+JavaScript work onto background threads without blocking the UI. The
+repository bundles two pieces side by side:
 
-<p align="center">
-  <a href="https://reactnative.dev"><img alt="React Native" src="https://img.shields.io/badge/React%20Native-0.73+-lightblue?logo=react" /></a>
-  <a href="https://www.typescriptlang.org/"><img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.x-3178c6?logo=typescript&logoColor=white" /></a>
-  <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/License-MIT-success" /></a>
-  <a href="#community--support"><img alt="Join the community" src="https://img.shields.io/badge/Join-Community-purple" /></a>
-</p>
+- **Demo application (`src/`)** – a React Native UI that lets you initialize the
+  worker pool, launch multiple sample jobs, watch live progress, cancel work,
+  and inspect pool statistics.
+- **`react-native-threadforge` native module (`packages/react-native-threadforge/`)** –
+  a cross-platform bridge that serializes JavaScript functions, executes them on
+  native worker threads, and streams results back to React Native.
 
-> **ThreadForge** is a teaching lab and reusable toolkit that shows how to push React Native beyond the main JS thread—without sacrificing DX or UX. The repo bundles a polished showcase app plus the `react-native-threadforge` package they both rely on.
-
----
-
-## ✨ Highlights
-
-<table>
-  <tr>
-    <td>🧪 <strong>Hands-on demo lab</strong><br />Explore real-world scenarios (heavy math, image transforms, batched persistence) with live progress indicators and configurable knobs.</td>
-    <td>🧰 <strong>Production-ready library</strong><br />Drop the `react-native-threadforge` package into any Hermes-powered app to offload synchronous JS to native-backed worker pools.</td>
-  </tr>
-  <tr>
-    <td>🧭 <strong>Guided learning paths</strong><br />Follow scenario cards, architecture sketches, and narrated walkthroughs that double as onboarding material for your team.</td>
-    <td>📈 <strong>Observability first</strong><br />Ship with built-in telemetry hooks, structured logging, and performance dashboards you can adapt to your own stack.</td>
-  </tr>
-</table>
+The project is built and maintained by **Abhishek Kumar**
+([LinkedIn](https://www.linkedin.com/in/i-am-abhishek-kumar/)).
 
 ---
 
-## 📦 What’s Inside?
+## Highlights at a glance
 
-| Package | Description | Quick peek |
-| --- | --- | --- |
-| [`/`](./) | Showcase application built with Expo-style ergonomics that demonstrates background work patterns, UX strategies, and testing approaches. | [`App.tsx`](./App.tsx) · [`src/screens`](./src) |
-| [`packages/react-native-threadforge`](./packages/react-native-threadforge) | The reusable worker orchestration library with TypeScript typings and native bridges for iOS & Android. | [`src/index.ts`](./packages/react-native-threadforge/src/index.ts) |
-| [`docs/assets`](./docs/assets) | Logos, screenshots, and diagrams for documentation and presentations. | [`threadforge-demo.gif`](./docs/assets/threadforge-demo.gif) |
+| Capability | Where to look |
+| --- | --- |
+| Threaded task execution with cancellation and priorities | [`packages/react-native-threadforge/src/index.ts`](./packages/react-native-threadforge/src/index.ts) |
+| Live progress updates delivered over the React Native event emitter | [`ThreadForgeModule.kt`](./packages/react-native-threadforge/android/src/main/java/com/threadforge/ThreadForgeModule.kt), [`ThreadForge.mm`](./packages/react-native-threadforge/ios/ThreadForge.mm) |
+| Configurable defaults loaded from environment variables | [`packages/react-native-threadforge/src/config.ts`](./packages/react-native-threadforge/src/config.ts) |
+| Demo task factories with pre-serialized sources for release builds | [`src/tasks`](./src/tasks) |
+| Reusable alert helper and status tracking UI | [`src/utils/showAlert.ts`](./src/utils/showAlert.ts), [`src/App.tsx`](./src/App.tsx) |
 
 ---
 
-## 🚀 Quick Start (Demo App)
+## Run the demo locally
 
 ```bash
-# Clone & install
-git clone https://github.com/your-org/threadforge.git
-cd threadforge
+# Install JavaScript dependencies
 npm install
 
-# Start Metro & run on your favorite platform
-npm start        # launches Expo-style dev server
-npm run ios      # or npm run android
+# Start Metro
+npm start
+
+# In a second terminal, choose a platform target
+npm run ios     # Requires Xcode + an iOS simulator
+npm run android # Requires Android Studio + an emulator or device
 ```
 
-<details>
-<summary><strong>Preflight checklist</strong></summary>
+The native module expects Hermes to be enabled on both platforms. Android builds
+already ship with `hermesEnabled=true` in
+[`android/gradle.properties`](./android/gradle.properties). For iOS, `use_hermes!`
+is set in [`ios/Podfile`](./ios/Podfile).
 
-- ✅ Node.js 18+ and npm 9+
-- ✅ Watchman (macOS/Linux) for faster file watching
-- ✅ Xcode 15+ (macOS) and/or Android Studio with SDK Platform 34
-- ✅ Ruby + CocoaPods (`sudo gem install cocoapods` or via `brew`)
+To run Jest or ESLint checks:
 
-</details>
-
-<p align="center">
-  <img src="./docs/assets/threadforge-demo.gif" alt="ThreadForge walkthrough" width="360" />
-</p>
+```bash
+npm test
+npm run lint
+```
 
 ---
 
-## 🧵 Library at a Glance
+## Guided tour of the demo
 
-```ts
-import { threadForge, TaskPriority } from 'react-native-threadforge';
+The UI defined in [`src/App.tsx`](./src/App.tsx) wires a handful of buttons to
+serializable task factories. Each task relies on the `ThreadTask` helper from
+[`src/tasks/threadHelpers.ts`](./src/tasks/threadHelpers.ts) so the original
+function source is always available after Hermes bytecode stripping.
 
-await threadForge.initialize(4, {
-  progressThrottleMs: 100,
-});
-
-const result = await threadForge.runTask({
-  id: 'pi-sim',
-  priority: TaskPriority.High,
-  worklet() {
-    let total = 0;
-    for (let i = 0; i < 5_000_000; i++) {
-      total += Math.sqrt(i);
-      if (i % 200_000 === 0) reportProgress(i / 5_000_000);
-    }
-    return total;
-  },
-});
-```
-
-- 🔐 Built for Hermes: each worker is its own Hermes runtime with isolated memory.
-- 🎯 Priorities, cancellation tokens, and debounced progress events out of the box.
-- 🪝 Hooks for analytics/logging (`onTaskStart`, `onTaskComplete`, `onError`).
-- 📦 Zero-config defaults, but everything is overrideable via DI-style factories.
-
-See the [library README](./packages/react-native-threadforge/README.md) for deep dives, API docs, and recipes.
-
----
-
-## 🗺️ Guided Tour
-
-| Scene | What you’ll learn | Source |
+| Task | Implementation | What it showcases |
 | --- | --- | --- |
-| **Crash Course** | Intro to multi-threaded JS, worker pool limits, UI-safe progress indicators. | [`src/screens/Welcome`](./src/screens/Welcome) |
-| **Image Alchemist** | Pixel manipulations, transferable buffers, cancellation UX patterns. | [`src/screens/ImageLab`](./src/screens/ImageLab) |
-| **Number Forge** | CPU-bound loops, prioritization, telemetry overlays. | [`src/screens/NumberForge`](./src/screens/NumberForge) |
-| **Persistence Lab** | Batched database writes with optimistic UI. | [`src/screens/PersistenceLab`](./src/screens/PersistenceLab) |
+| Heavy math | [`src/tasks/heavyMath.ts`](./src/tasks/heavyMath.ts) | Iterative square roots with throttled `reportProgress` calls. |
+| Timer | [`src/tasks/timer.ts`](./src/tasks/timer.ts) | A cancellable delay that reports completion status. |
+| Instant message | [`src/tasks/instantMessage.ts`](./src/tasks/instantMessage.ts) | Returns a formatted string immediately to show minimal overhead. |
+| Image-style processing | [`src/tasks/imageProcessing.ts`](./src/tasks/imageProcessing.ts) | CPU-bound trigonometry simulating pixel work. |
+| Analytics aggregation | [`src/tasks/analytics.ts`](./src/tasks/analytics.ts) | Batches mock events and formats a summary. |
 
-Each scene ships with “try it” callouts, commentary, and toggles for instrumentation. Open the screen files to follow along with the README explanations.
-
----
-
-## 🧭 Architecture Snapshot
-
-```
-┌───────────────────────┐    enqueue()     ┌───────────────────────┐
-│ React Native UI Layer │ ───────────────▶ │ ThreadForge Scheduler │
-└───────────────────────┘                  └────────┬──────────────┘
-          ▲                                        │
-          │ progress/result events                 ▼
-┌───────────────────────┐    Hermes bridge    ┌───────────────────────┐
-│   Worker Runtime (n)  │ ◀────────────────── │   Native Bridges      │
-└───────────────────────┘                     └───────────────────────┘
-```
-
-- React components submit serializable worklets.
-- Scheduler maps them to Hermes-backed native threads.
-- Workers stream progress, logs, and final payloads back to JS.
-- Observability hooks mirror every transition for analytics or debugging.
+The demo also exposes a "Run four in parallel" button that launches several
+heavy math jobs simultaneously and a "Cancel latest" affordance powered by
+`threadForge.cancelTask`.
 
 ---
 
-## 🛠️ Common Tasks
+## Native architecture overview
 
-<details>
-<summary><strong>Configure worker pool size</strong></summary>
-
-```ts
-threadForge.initialize(6, {
-  fallbackPriority: TaskPriority.Normal,
-  progressThrottleMs: 75,
-});
-```
-
-</details>
-
-<details>
-<summary><strong>Listen for progress globally</strong></summary>
-
-```ts
-const subscription = threadForge.onProgress((taskId, value) => {
-  console.log(`[${taskId}] ${(value * 100).toFixed()}%`);
-});
-```
-
-</details>
-
-<details>
-<summary><strong>Cancel long-running work</strong></summary>
-
-```ts
-const controller = threadForge.createAbortController();
-threadForge.runTask({ id: 'report', signal: controller.signal, worklet: generateReport });
-controller.abort();
-```
-
-</details>
-
----
-
-## 🧪 Testing & Tooling
-
-| Command | Purpose |
+| Layer | Responsibilities |
 | --- | --- |
-| `npm test` | Run Jest suites for the demo + library. |
-| `npm run lint` | ESLint with React Native, TypeScript, and Jest configs. |
-| `npm run typecheck` | Strict TypeScript validation for all packages. |
-| `npm run build:lib` | Produce the publishable library bundle. |
+| **JavaScript** | `ThreadForgeEngine` validates input, serializes worklet functions, dispatches to native, and parses structured responses. |
+| **Android (Kotlin + JNI)** | [`ThreadForgeModule.kt`](./packages/react-native-threadforge/android/src/main/java/com/threadforge/ThreadForgeModule.kt) ensures Hermes is present, calls into the shared C++ worker pool, and emits progress through `RCTDeviceEventEmitter`. |
+| **iOS (Objective-C++)** | [`ThreadForge.mm`](./packages/react-native-threadforge/ios/ThreadForge.mm) mirrors the Android bridge using GCD queues and shared C++ helpers. |
+| **Shared C++ core** | [`cpp/`](./packages/react-native-threadforge/cpp) hosts the `ThreadPool`, `FunctionExecutor`, and JSON helpers that run tasks and package results. |
 
-See [`package.json`](./package.json) for the complete script catalog.
-
----
-
-## 🤝 Contributing
-
-We love actionable contributions! Before opening a PR:
-
-1. Review the [issue tracker](https://github.com/your-org/threadforge/issues) to avoid duplicates.
-2. Run the test + lint suite.
-3. Follow the architectural patterns outlined in [`docs/architecture.md`](./docs/architecture.md) (coming soon!).
-
-If you’re proposing major changes, open a discussion first so we can co-design the approach.
+Both native modules expose the same methods (`initialize`, `runFunction`,
+`cancelTask`, `getStats`, `shutdown`) so the JavaScript layer can remain
+platform-agnostic.
 
 ---
 
-## 📣 Community & Support
+## Repository structure
 
-- 💬 Join the conversation in **#threadforge** on our community Slack (request an invite via `team@threadforge.dev`).
-- 🐞 Found a bug? [Open an issue](https://github.com/your-org/threadforge/issues/new/choose) with repro steps and environment details.
-- 🧭 Need consultation? Book office hours with the maintainers via Calendly (link in Slack topic).
-
----
-
-## 🗺️ Roadmap Snapshot
-
-- [x] Hermes worker pools with dynamic sizing
-- [x] Structured telemetry + progress streaming
-- [ ] SharedArrayBuffer support for zero-copy transfers
-- [ ] Desktop (React Native for macOS/Windows) adapters
-- [ ] GUI profiler overlay baked into the demo app
+```
+├─ App.tsx                        # Delegates to the demo app under src/
+├─ src/                           # React Native UI, task factories, utilities
+├─ packages/react-native-threadforge/
+│  ├─ android/                    # Android bridge and JNI bindings
+│  ├─ ios/                        # iOS bridge
+│  ├─ cpp/                        # Shared thread pool implementation
+│  └─ src/                        # TypeScript API surface
+├─ docs/                          # Supplementary documentation assets
+└─ __tests__/                     # Jest tests for the demo helpers
+```
 
 ---
 
-## 📄 License
+## Creator
 
-Licensed under the [MIT License](./LICENSE). Use it, remix it, and ship performant apps without the main-thread jank.
+- **Name:** Abhishek Kumar
+- **LinkedIn:** <https://www.linkedin.com/in/i-am-abhishek-kumar/>
 
----
-
-<p align="center">Made with ❤️ by the ThreadForge maintainers.</p>
+Feel free to reach out with feedback, ideas, or questions about the project.
