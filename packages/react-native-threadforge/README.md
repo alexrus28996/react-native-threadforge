@@ -1,18 +1,26 @@
-# react-native-threadforge
+# 🚀 react-native-threadforge
 
-`react-native-threadforge` is a lightweight native module that executes
-serializable JavaScript functions on background threads powered by a shared C++
-worker pool. It is designed for React Native apps that need to run CPU-intensive
-work without blocking the main UI thread.
+<p align="center">
+  <img src="../../docs/assets/threadforge-logo.png" alt="ThreadForge logo" width="420" />
+</p>
 
-This package is authored by **Abhishek Kumar**
-([LinkedIn](https://www.linkedin.com/in/i-am-abhishek-kumar/)).
+**ThreadForge** brings real multi-threading to React Native. It runs serializable JavaScript functions on background threads using a high-performance C++ worker pool — freeing up your main thread for smooth, responsive UIs.
+
+Crafted by [**Abhishek Kumar**](https://www.linkedin.com/in/i-am-abhishek-kumar/).
 
 ---
 
-## Getting started
+## ✨ Features
 
-Install the package from npm (or reference it locally as this repository does):
+- 🧵 **True multi-threading** for JavaScript in React Native apps
+- ⚙️ Hermes-first with validation and graceful fallbacks
+- 🚦 **Progress reporting** and **task cancellation** built-in
+- 🔧 Fully configurable **thread count** and **throttle**
+- 📦 Drop-in integration with a simple TypeScript API
+
+---
+
+## 📦 Installation
 
 ```bash
 npm install react-native-threadforge
@@ -20,28 +28,47 @@ npm install react-native-threadforge
 yarn add react-native-threadforge
 ```
 
-If you are consuming the module straight from this monorepo, the demo app links
-it through `"react-native-threadforge": "file:packages/react-native-threadforge"`.
-
-Then install native dependencies:
+Then link native modules:
 
 ```bash
 npx pod-install
 ```
 
-### Requirements
+### ✅ Requirements
 
 - React Native **0.70+**
-- Hermes enabled on Android (`hermesEnabled=true` in `android/gradle.properties`)
-  and iOS (`use_hermes!` in `ios/Podfile`)
-- Android Studio / Xcode for building native code
-
-The module automatically loads its native library on both platforms and will
-throw descriptive errors if Hermes is missing.
+- Hermes enabled (`android/gradle.properties` & `ios/Podfile`)
+- Android NDK / Xcode installed
 
 ---
 
-## Quick usage
+## 🎬 Demo
+
+<p align="center">
+  <img src="../../docs/assets/threadforge-demo.gif" alt="ThreadForge progress demo" width="520" />
+</p>
+
+<details>
+<summary>📸 Static Preview</summary>
+
+![ThreadForge task list](../../docs/assets/threadforge-demo.jpeg)
+
+</details>
+
+Try the full example app by cloning the repository:
+
+```bash
+git clone https://github.com/alexrus28996/react-native-threadforge.git
+cd react-native-threadforge
+npm install
+npm run ios # or npm run android
+```
+
+➡️ GitHub: [https://github.com/alexrus28996/react-native-threadforge](https://github.com/alexrus28996/react-native-threadforge)
+
+---
+
+## ⚡ Quick Start
 
 ```tsx
 import {
@@ -52,119 +79,99 @@ import {
 
 await threadForge.initialize();
 
-const subscription = threadForge.onProgress((taskId, value) => {
-  console.log('progress', taskId, value);
+const sub = threadForge.onProgress((id, progress) => {
+  console.log(`Progress for ${id}: ${progress}`);
 });
 
 try {
-  const summary = await threadForge.runFunction(
-    'analytics-job-1',
+  const result = await threadForge.runFunction(
+    'heavy-task',
     () => {
-      const points = Array.from({ length: 1_000 }, (_, index) => Math.sin(index));
-      const total = points.reduce((acc, value) => acc + value, 0);
+      const values = Array.from({ length: 1000 }, (_, i) => Math.sin(i));
+      const sum = values.reduce((acc, v) => acc + v, 0);
       globalThis.reportProgress?.(1);
-      return { total };
+      return { sum };
     },
-    TaskPriority.HIGH,
+    TaskPriority.HIGH
   );
-  console.log('Result', summary);
-} catch (error) {
-  if (error instanceof ThreadForgeCancelledError) {
-    console.log('Task cancelled');
+  console.log(result);
+} catch (err) {
+  if (err instanceof ThreadForgeCancelledError) {
+    console.warn('Task was cancelled');
+  } else {
+    console.error(err);
   }
 }
 
-subscription.remove();
+sub.remove();
 await threadForge.shutdown();
 ```
 
-Worklet functions must be self-contained so they can be serialized to strings.
-For release builds with Hermes bytecode, provide a manual source override (see
-[`src/tasks/threadHelpers.ts`](../../src/tasks/threadHelpers.ts) for an example).
+> 💡 In Hermes release builds, preserve source using `__threadforgeSource` (see [`src/tasks/threadHelpers.ts`](../../src/tasks/threadHelpers.ts))
 
 ---
 
-## API reference
+## 🛠 API Overview
 
-### `threadForge.initialize(threadCount?, options?)`
-Initializes the native worker pool. `threadCount` defaults to
-`DEFAULT_THREAD_COUNT` (4 unless overridden by environment variables). Provide
-`options.progressThrottleMs` to control how often progress events are emitted
-from native to JavaScript.
+### `initialize(threadCount?, options?)`
+Boot up the thread pool. Defaults to 4 threads.
 
-### `threadForge.runFunction(id, worklet, priority?)`
-Runs a serializable `worklet` on a background thread. Returns a `Promise<T>` with
-the worklet result. Throws an error if serialization fails or the native layer
-returns a failure. Passing an invalid `id` or function triggers validation
-errors before native code is executed.
+### `runFunction(id, worklet, priority?)`
+Execute a serializable worklet. Returns a `Promise<T>`.
 
-### `threadForge.onProgress(listener)`
-Registers a callback invoked with `(taskId, progress)` values between 0 and 1.
-Returns an `EmitterSubscription`; call `.remove()` when finished.
+### `onProgress(listener)`
+Subscribe to progress updates `(id, progress: 0-1)`.
 
-### `threadForge.cancelTask(id)`
-Attempts to cancel a task currently queued or running. Resolves to `true` if the
-native layer acknowledged the cancellation request.
+### `cancelTask(id)`
+Request cancellation of a running or queued task.
 
-### `threadForge.getStats()`
-Retrieves the latest thread pool statistics `{ threadCount, pending, active }`.
-The method parses JSON strings returned by the native side for compatibility
-with both platforms.
+### `getStats()`
+Returns `{ threadCount, pending, active }`.
 
-### `threadForge.shutdown()`
-Stops the worker pool and unsubscribes native progress emitters. Safe to call
-multiple times.
+### `shutdown()`
+Tears down the thread pool.
 
-### `threadForge.isInitialized()`
-Returns `true` after `initialize` completes and `false` after `shutdown`.
+### `isInitialized()`
+Returns boolean indicating init status.
 
 ### `ThreadForgeCancelledError`
-Custom error subclass thrown when the native layer reports a cancelled task.
+Error class thrown when a task is canceled.
 
 ### `TaskPriority`
-Enum exported with `LOW`, `NORMAL`, and `HIGH`. The native bridges clamp incoming
-values to this range.
-
-### `DEFAULT_THREAD_COUNT`, `DEFAULT_PROGRESS_THROTTLE_MS`, `threadForgeConfig`
-Configuration helpers sourced from [`src/config.ts`](./src/config.ts). Override
-via environment variables (`THREADFORGE_DEFAULT_THREAD_COUNT` and
-`THREADFORGE_PROGRESS_THROTTLE_MS`).
+Enum: `LOW`, `NORMAL`, `HIGH`
 
 ---
 
-## Native implementation overview
+## 🧩 Architecture
 
-- **Android:** [`ThreadForgeModule.kt`](./android/src/main/java/com/threadforge/ThreadForgeModule.kt)
-  validates Hermes, marshals requests onto a cached thread pool, and communicates
-  with the shared C++ worker pool via JNI bindings in [`cpp/`](./cpp).
-- **iOS:** [`ThreadForge.mm`](./ios/ThreadForge.mm) mirrors the Android bridge
-  using Grand Central Dispatch and the same C++ helpers.
-- **Shared C++:** [`ThreadPool.cpp`](./cpp/ThreadPool.cpp),
-  [`FunctionExecutor.cpp`](./cpp/FunctionExecutor.cpp), and
-  [`TaskResult.cpp`](./cpp/TaskResult.cpp) run serialized worklets, manage
-  cancellations, and encode results as JSON.
+- **JS Layer** – TypeScript engine for clean API
+- **Android** – Kotlin + JNI calling into native C++
+- **iOS** – Obj-C++ bridge using GCD
+- **C++ Core** – Thread pool + Hermes VM + JSON serialization
 
 ---
 
-## Testing and linting
-
-This package ships with Jest unit tests that exercise the JavaScript facade:
+## 🧪 Tests & Linting
 
 ```bash
-cd packages/react-native-threadforge
-npm test
-```
-
-TypeScript and ESLint configs are included for additional validation:
-
-```bash
-npm run typescript
-npm run lint
+npm test           # Run Jest tests
+npm run lint       # Check ESLint rules
+npm run typescript # Validate types
 ```
 
 ---
 
-## Changelog & licensing
+## 📜 License & Author
 
-- Changes are tracked in [`CHANGELOG.md`](./CHANGELOG.md).
-- Distributed under the [MIT License](../../LICENSE).
+- MIT License – [LICENSE](../../LICENSE)
+- Developed by [Abhishek Kumar](https://www.linkedin.com/in/i-am-abhishek-kumar/)
+
+---
+
+## 💡 Pro Tips
+
+- ✅ Use `shutdown()` to release native resources
+- 🧩 Worklets must be **pure functions** — no closures or side effects
+- ⚠️ Use `progressThrottleMs` carefully to avoid bridge overload
+- 🔍 Detect cancellation with `ThreadForgeCancelledError`
+- 📊 Use `getStats()` for task queue visibility
