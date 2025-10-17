@@ -1,8 +1,50 @@
 # ThreadForge Demo App & Library
 
-ThreadForge is a React Native playground that demonstrates how to move CPU-heavy JavaScript work onto native thread pools. This repository contains both a demo application and a reusable library for background processing.
+ThreadForge is a React Native playground that demonstrates how to move CPU-heavy JavaScript work onto native thread pools while keeping the UI smooth. The repository ships both a polished demo application and the reusable `react-native-threadforge` library that powers it.
 
-## 🚀 Quick Start
+## Project Overview
+
+### Purpose
+- Showcase how Hermes-powered React Native apps can delegate work to background threads.
+- Provide production-ready primitives for orchestrating long-running or parallel JavaScript tasks.
+- Serve as a reference implementation for teams integrating ThreadForge into their own apps.
+
+### Feature Highlights
+
+| Feature | Description | What You Learn |
+|---------|-------------|----------------|
+| **Heavy Math** | Crunch millions of `Math.sqrt` calls with live progress updates. | Keep CPU-intensive calculations off the main thread. |
+| **Timer Tasks** | Demonstrates long-running busy-wait operations with streaming progress. | Send frequent updates from worker threads without blocking renders. |
+| **Instant Messages** | Fire-and-forget low-priority tasks that return instantly. | Implement prioritized queues for lightweight jobs. |
+| **Parallel Batches** | Executes multiple tasks simultaneously across workers. | Coordinate concurrent background work. |
+| **Image Processing** | Simulates pixel crunching and analytics in workers. | Build responsive media pipelines. |
+| **SQLite Bulk Insert** | Executes large database writes via ThreadForge workers. | Pair native persistence with background compute. |
+
+### Tech Stack
+
+| Layer | Technologies |
+|-------|--------------|
+| Core Framework | React Native 0.76, Hermes engine |
+| Mobile Platforms | Native iOS (Swift/Objective-C), Native Android (Kotlin/Java) |
+| State & UI | React 18 hooks, React Native primitives |
+| Data & Storage | `react-native-sqlite-storage` |
+| Tooling | Metro bundler, Jest, ESLint, TypeScript |
+
+## Table of Contents
+- [Quick Start](#quick-start)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Environment Configuration](#environment-configuration)
+- [Running the Project](#running-the-project)
+- [Testing](#testing)
+- [Deployment](#deployment)
+- [Usage Examples](#usage-examples)
+- [Architecture Overview](#architecture-overview)
+- [Advanced Patterns](#advanced-patterns)
+- [API Reference](#api-reference)
+- [Contribution Guidelines](#contribution-guidelines)
+
+## Quick Start
 
 ```bash
 # 1. Install dependencies
@@ -15,79 +57,86 @@ npm start
 npm run android   # or: npm run ios
 ```
 
-## 📱 Demo Features
+## Prerequisites
+- Node.js 18 or newer (npm 9+ recommended).
+- React Native CLI environment for Android and iOS development.
+- Android Studio with the latest SDK platform tools.
+- Xcode 15+ with Command Line Tools installed.
+- A configured device or emulator/simulator for each platform you want to target.
 
-| Feature | Description | What You'll Learn |
-|---------|-------------|-------------------|
-| **Heavy Math** | Crunches millions of `Math.sqrt` calls with progress updates | CPU-intensive calculations without blocking UI |
-| **Timer Tasks** | Busy-waits with percentage progress streaming | Long-running operations with real-time feedback |
-| **Instant Messages** | Low-priority immediate return tasks | Quick task execution and priority handling |
-| **Parallel Batches** | Multi-threaded task execution | Concurrent processing and thread management |
-| **Image Processing** | Background image operations with analytics | File processing and data analysis |
-| **SQLite Bulk Insert** | Database operations with ThreadForge workers | Data persistence and analytics processing |
+## Installation
+1. Clone the repository and change into the project directory.
+2. Install JavaScript dependencies with `npm install`.
+3. For iOS builds, install CocoaPods dependencies via `npx pod-install ios` (or `bundle exec pod install`).
+4. Verify Metro can start successfully by running `npm start`.
 
-## 🏗️ Architecture Overview
+## Environment Configuration
 
-### Key Components
+### Common
+- Ensure Hermes remains enabled (`USE_HERMES=1` in native build configs) because ThreadForge depends on Hermes worker support.
+- When editing worker functions, always attach source metadata (`__threadforgeSource`) to keep Hermes compatibility.
 
-| Path | Purpose |
-|------|---------|
-| [`src/App.tsx`](./src/App.tsx) | Main demo application with all examples |
-| [`src/screens/SqliteBulkInsertScreen.tsx`](./src/screens/SqliteBulkInsertScreen.tsx) | SQLite demo with database operations |
-| [`src/tasks/*.ts`](./src/tasks) | Ready-to-use worker task factories |
-| [`packages/react-native-threadforge/src`](./packages/react-native-threadforge/src) | Public TypeScript API |
-| [`packages/react-native-threadforge/ios`](./packages/react-native-threadforge/ios) | Native iOS implementation |
-| [`packages/react-native-threadforge/android`](./packages/react-native-threadforge/android) | Native Android implementation |
+### Android
+1. Install Android SDK packages (API level 34 or the version matching your emulator).
+2. Configure `ANDROID_HOME`/`ANDROID_SDK_ROOT` environment variables and accept SDK licenses.
+3. Use JDK 17+ and ensure Gradle can locate it (e.g., `export JAVA_HOME=$(/usr/libexec/java_home -v 17)`).
+4. Create or start an emulator from Android Studio before running `npm run android`.
 
-## 🛠️ Setup Instructions
-
-### Prerequisites
-- Node.js 18+
-- React Native 0.76+
-- Android Studio (for Android)
-- Xcode 15+ (for iOS)
-
-### Android Setup
-
-1. **Install Android SDK and JDK 17+**
-2. **Configure emulator or device**
-3. **Run the demo:**
-   ```bash
-   npm start
-   npm run android
-   ```
-
-### iOS Setup
-
-1. **Install Xcode with Command Line Tools**
-2. **Install CocoaPods dependencies:**
-   ```bash
-   npx pod-install ios
-   ```
-   If you invoke `pod install` manually on Apple Silicon and see an error about `ffi` or `json`
-   extensions being built for `x86_64`, install the arm64-native gems first:
+### iOS
+1. Install Xcode plus Command Line Tools from Apple.
+2. Run `npx pod-install ios` after dependency changes.
+3. On Apple Silicon, ensure native gems are arm64-compatible:
    ```bash
    bundle install
    bundle exec pod install
-   # or, if you rely on the system Ruby:
+   # Or use system Ruby:
    sudo gem uninstall ffi json
    sudo arch -arm64 gem install ffi:1.16.3 json
    ```
-3. Confirm Hermes is enabled (ThreadForge depends on it for the background runtime). The default
-   React Native template already sets `USE_HERMES=1`, so only change this if you previously disabled
-   Hermes.
-4. Launch the demo application:
-   ```bash
-   npm start
-   npm run ios
-   ```
+4. Open the workspace in Xcode if you need to tweak signing or inspect native sources.
 
-## 💻 Usage Examples
+## Running the Project
+
+### Android
+```bash
+npm start           # Terminal 1: Metro bundler
+npm run android     # Terminal 2: Build & launch on emulator/device
+```
+Expect the demo home screen to list every showcase (Heavy Math, Timer Tasks, etc.) with responsive navigation between screens.
+
+### iOS
+```bash
+npm start           # Terminal 1: Metro bundler
+npm run ios         # Terminal 2: Build & launch on simulator/device
+```
+On successful launch, the simulator displays the same catalog of ThreadForge scenarios with live progress indicators.
+
+### Web
+ThreadForge currently focuses on native mobile targets. There is no official web build yet, but community experiments using `react-native-web` are welcome. Contributions that add a `npm run web` workflow should document additional setup requirements.
+
+## Testing
+```bash
+# Run unit tests
+npm test
+
+# Run lint checks
+npm run lint
+```
+Both commands must pass locally and in CI before submitting or merging pull requests.
+
+## Deployment
+- Publishing instructions for the `react-native-threadforge` package live in [PUBLISHING.md](./PUBLISHING.md).
+- Validate Android and iOS releases by running the demo on physical hardware when possible.
+- Tag releases with semantic versions (`vX.Y.Z`) and push the tag after publishing.
+
+## Usage Examples
 
 ### Basic ThreadForge Setup
+Run an expensive computation in the background while keeping the UI responsive:
 
 ```tsx
 import React, { useEffect, useState } from 'react';
+import { Button, Text, View } from 'react-native';
 import { threadForge } from 'react-native-threadforge';
 
 export function MyComponent() {
@@ -97,7 +146,7 @@ export function MyComponent() {
   useEffect(() => {
     // Initialize with 4 worker threads
     threadForge.initialize(4);
-    
+
     // Listen for progress updates
     const subscription = threadForge.onProgress((taskId, value) => {
       if (taskId === 'my-task') {
@@ -122,12 +171,11 @@ export function MyComponent() {
       }
       return total.toFixed(2);
     };
-    
-    // Attach source for Hermes compatibility
-    Object.defineProperty(task, '__threadforgeSource', { 
-      value: task.toString() 
+
+    Object.defineProperty(task, '__threadforgeSource', {
+      value: task.toString()
     });
-    
+
     const output = await threadForge.runFunction('my-task', task);
     setResult(output);
   };
@@ -141,8 +189,10 @@ export function MyComponent() {
   );
 }
 ```
+**Expected outcome:** Tapping the button animates progress updates from 0–100% while the UI stays interactive, and the result text prints the computed sum.
 
 ### Parallel Task Execution
+Execute multiple jobs concurrently and cancel them on demand:
 
 ```tsx
 const taskIds = ['batch-1', 'batch-2', 'batch-3'];
@@ -172,11 +222,13 @@ const cancelAll = () => {
   taskIds.forEach(id => threadForge.cancelTask(id));
 };
 ```
+**Expected outcome:** Starting the batch schedules three worker jobs that stream progress independently. Invoking `cancelAll` stops remaining work immediately.
 
-### SQLite Integration with Modern Libraries
+### Database Operations with ThreadForge
+Generate data off the main thread and bulk-insert with SQLite:
 
 ```tsx
-import SQLite from 'react-native-sqlite-2'; // Modern, compatible library
+import SQLite from 'react-native-sqlite-storage';
 
 const ensureDatabase = async () => {
   const database = await SQLite.openDatabase({
@@ -186,28 +238,13 @@ const ensureDatabase = async () => {
   return database;
 };
 
-const insertData = async (data) => {
-  const db = await ensureDatabase();
-  await db.transaction(async (tx) => {
-    await tx.executeSql(
-      'INSERT INTO orders (id, amount) VALUES (?, ?)',
-      [data.id, data.amount]
-    );
-  });
-};
-```
-
-### Database Operations with ThreadForge
-
-```tsx
-// Generate data on background thread
 const generateOrderData = async (batchSize: number) => {
   const task = () => {
     const orders = [];
     for (let i = 0; i < batchSize; i++) {
       orders.push({
-        id: Math.random() * 1000000,
-        amount: Math.random() * 1000,
+        id: Math.random() * 1_000_000,
+        amount: Math.random() * 1_000,
         category: ['Electronics', 'Books', 'Clothing'][Math.floor(Math.random() * 3)]
       });
       if (i % 100 === 0) {
@@ -216,16 +253,15 @@ const generateOrderData = async (batchSize: number) => {
     }
     return orders;
   };
-  
+
   Object.defineProperty(task, '__threadforgeSource', { value: task.toString() });
   return await threadForge.runFunction('generate-orders', task);
 };
 
-// Process and insert data
 const processOrders = async () => {
   const orders = await generateOrderData(1000);
   const db = await ensureDatabase();
-  
+
   await db.transaction(async (tx) => {
     for (const order of orders) {
       await tx.executeSql(
@@ -236,8 +272,22 @@ const processOrders = async () => {
   });
 };
 ```
+**Expected outcome:** The generator reports progress during batch creation, and once complete the transaction writes every order without stalling UI interactions.
 
-## 🔧 Advanced Patterns
+> 💡 Explore the demo application to see these patterns rendered with charts, timers, and real-time counters. Capture device screenshots or screen recordings to document performance improvements when presenting your own benchmarks.
+
+## Architecture Overview
+
+| Path | Purpose |
+|------|---------|
+| [`src/App.tsx`](./src/App.tsx) | Main demo application with navigation across all examples. |
+| [`src/screens/SqliteBulkInsertScreen.tsx`](./src/screens/SqliteBulkInsertScreen.tsx) | SQLite demo showcasing bulk inserts. |
+| [`src/tasks/*.ts`](./src/tasks) | Ready-to-use worker task factories. |
+| [`packages/react-native-threadforge/src`](./packages/react-native-threadforge/src) | Public TypeScript API surface for the library. |
+| [`packages/react-native-threadforge/ios`](./packages/react-native-threadforge/ios) | Native iOS implementation. |
+| [`packages/react-native-threadforge/android`](./packages/react-native-threadforge/android) | Native Android implementation. |
+
+## Advanced Patterns
 
 ### Image Processing Pipeline
 
@@ -249,17 +299,17 @@ const processImages = async (imagePaths: string[]) => {
     while (Date.now() - startTime < 2000) {
       // Heavy image processing work
     }
-    return { path, processed: true, size: Math.random() * 1000000 };
+    return { path, processed: true, size: Math.random() * 1_000_000 };
   };
-  
+
   Object.defineProperty(processImage, '__threadforgeSource', { value: processImage.toString() });
-  
+
   const results = await Promise.all(
-    imagePaths.map((path, index) => 
+    imagePaths.map((path, index) =>
       threadForge.runFunction(`image-${index}`, () => processImage(path))
     )
   );
-  
+
   return results;
 };
 ```
@@ -275,29 +325,27 @@ const analyzeData = async (data: any[]) => {
       sum: 0,
       average: 0
     };
-    
+
     for (let i = 0; i < data.length; i++) {
       const item = data[i];
       stats.sum += item.value;
       stats.categories.set(item.category, (stats.categories.get(item.category) || 0) + 1);
-      
-      if (i % 1000 === 0) {
+
+      if (i % 1_000 === 0) {
         reportProgress(i / data.length);
       }
     }
-    
+
     stats.average = stats.sum / stats.total;
     return stats;
   };
-  
+
   Object.defineProperty(analytics, '__threadforgeSource', { value: analytics.toString() });
   return await threadForge.runFunction('data-analytics', analytics);
 };
 ```
 
-## 📚 API Reference
-
-### ThreadForge Core Methods
+## API Reference
 
 ```tsx
 // Initialize with N worker threads
@@ -319,111 +367,22 @@ threadForge.getStats(): Promise<ThreadStats>
 threadForge.shutdown(): void
 ```
 
-### Task Priorities
+## Contribution Guidelines
 
-```tsx
-import { TaskPriority } from 'react-native-threadforge';
+### Branching Strategy
+- Create feature branches from `main` using the pattern `feature/<summary>` or `fix/<summary>`.
+- Keep branches focused; prefer multiple small PRs over a single massive change.
 
-// High priority for critical tasks
-await threadForge.runFunction('critical-task', myFunction, TaskPriority.HIGH);
+### Quality Gates
+- Run `npm run lint` and `npm test` locally before opening a pull request.
+- Provide platform-specific validation details (Android/iOS) in your PR description when changes touch native code.
+- Update relevant documentation and example code whenever APIs or behaviors change.
 
-// Normal priority for standard tasks
-await threadForge.runFunction('normal-task', myFunction, TaskPriority.NORMAL);
+### Pull Request Expectations
+- Fill out the PR template (if available) with context, screenshots/GIFs, and testing notes.
+- Reference related issues and clearly describe user-facing changes.
+- Request reviews from maintainers of affected areas (JS, Android, iOS) and respond to feedback promptly.
 
-// Low priority for background tasks
-await threadForge.runFunction('background-task', myFunction, TaskPriority.LOW);
-```
+### Code of Conduct
+We follow the [React Native Code of Conduct](https://reactnative.dev/code-of-conduct). Be respectful, inclusive, and constructive in all project spaces.
 
-## 🎯 Best Practices
-
-### 1. **Initialization Pattern**
-```tsx
-useEffect(() => {
-  threadForge.initialize(4); // Start with 2-4 threads
-  return () => {
-    threadForge.shutdown();
-  };
-}, []);
-```
-
-### 2. **Progress Tracking**
-```tsx
-useEffect(() => {
-  const subscription = threadForge.onProgress((taskId, progress) => {
-    if (taskId === 'my-task') {
-      setProgress(progress);
-    }
-  });
-  return () => subscription.remove();
-}, []);
-```
-
-### 3. **Error Handling**
-```tsx
-const runTask = async () => {
-  try {
-    const result = await threadForge.runFunction('my-task', myFunction);
-    setResult(result);
-  } catch (error) {
-    console.error('Task failed:', error);
-    setError(error.message);
-  }
-};
-```
-
-### 4. **Memory Management**
-```tsx
-// Process large datasets in chunks
-const processLargeDataset = async (data: any[]) => {
-  const chunkSize = 1000;
-  const chunks = [];
-  
-  for (let i = 0; i < data.length; i += chunkSize) {
-    chunks.push(data.slice(i, i + chunkSize));
-  }
-  
-  const results = await Promise.all(
-    chunks.map((chunk, index) => 
-      threadForge.runFunction(`chunk-${index}`, () => processChunk(chunk))
-    )
-  );
-  
-  return results.flat();
-};
-```
-
-## 🧪 Testing
-
-```bash
-# Run Jest tests
-npm test
-
-# Run with coverage
-npm test -- --coverage
-```
-
-## 📦 Publishing
-
-See [`PUBLISHING.md`](./PUBLISHING.md) for instructions on releasing the ThreadForge package to npm.
-
-## 📄 License
-
-This project is licensed under the MIT License.
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
-## 📞 Support
-
-- **Issues**: [GitHub Issues](https://github.com/your-repo/issues)
-- **Documentation**: [Package README](./packages/react-native-threadforge/README.md)
-- **Examples**: Check the `src/tasks/` directory for implementation patterns
-
----
-
-**Happy threading! 🧵⚡**
