@@ -1,7 +1,7 @@
 # 🚀 react-native-threadforge
 
 <p align="center">
-  <img src="../react-native-threadforge/docs/assets/threadforge-logo.png" alt="ThreadForge logo" width="420" />
+  <img src="https://raw.githubusercontent.com/alexrus28996/react-native-threadforge/main/docs/assets/threadforge-logo.png" alt="ThreadForge logo" width="420" />
 </p>
 
 **ThreadForge** brings real multi-threading to React Native. It runs serializable JavaScript functions on background threads using a high-performance C++ worker pool — freeing up your main thread for smooth, responsive UIs.
@@ -45,13 +45,13 @@ npx pod-install
 ## 🎬 Demo
 
 <p align="center">
-  <img src="../react-native-threadforge/docs/assets/threadforge-demo.gif" alt="ThreadForge progress demo" width="520" />
+  <img src="https://raw.githubusercontent.com/alexrus28996/react-native-threadforge/main/docs/assets/threadforge-demo.gif" alt="ThreadForge progress demo" width="520" />
 </p>
 
 <details>
 <summary>📸 Static Preview</summary>
 
-![ThreadForge task list](../react-native-threadforge/docs/assets/threadforge-demo.jpeg)
+![ThreadForge task list](https://raw.githubusercontent.com/alexrus28996/react-native-threadforge/main/docs/assets/threadforge-demo.jpeg)
 
 </details>
 
