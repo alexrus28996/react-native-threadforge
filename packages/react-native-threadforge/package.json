@@ -1,7 +1,7 @@
 {
   "name": "react-native-threadforge",
-  "version": "1.1.5",
-  "description": "Handcrafted multithreading toolkit for React Native backed by a native C++ worker pool",
+  "version": "1.1.6",
+  "description": "React Native multithreading toolkit for executing JavaScript functions on background threads using a native C++ worker pool with Hermes and JSI compatibility.",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "files": [
@@ -21,14 +21,25 @@
   "keywords": [
     "react-native",
     "multithreading",
-    "jni",
-    "threading",
-    "background-tasks",
-    "threadpool",
-    "performance"
+     "react",
+     "native",
+    "background threads",
+    "c++ worker pool",
+    "react-native performance",
+    "react-native optimization",
+    "native modules",
+    "threadforge"
   ],
   "author": "Abhishek Kumar (alexrus28996)",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alexrus28996/react-native-threadforge.git"
+  },
+  "homepage": "https://github.com/alexrus28996/react-native-threadforge#readme",
+  "bugs": {
+    "url": "https://github.com/alexrus28996/react-native-threadforge/issues"
+  },
   "peerDependencies": {
     "react": "*",
     "react-native": ">=0.70.0"
@@ -37,5 +48,11 @@
     "@types/react": "^18.0.0",
     "@types/react-native": "^0.72.0",
     "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
