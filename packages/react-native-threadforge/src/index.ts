@@ -96,6 +96,18 @@ export class ThreadForgeCancelledError extends Error {
 export class ThreadForgeEngine {
   private initialized = false;
   private readonly emitter = new NativeEventEmitter(ThreadForge);
+  /**
+   * Internal monotonic counter for task id suffix.
+   */
+  private nextId = 0;
+
+  /**
+   * Generates a unique task id. Uses a prefix + base36 timestamp + base36 counter.
+   */
+  private makeTaskId(prefix = 'tf'): string {
+    this.nextId = (this.nextId + 1) >>> 0;
+    return `${prefix}-${Date.now().toString(36)}-${this.nextId.toString(36)}`;
+  }
 
   async initialize(
     threadCount = DEFAULT_THREAD_COUNT,
@@ -190,6 +202,37 @@ export class ThreadForgeEngine {
       error.stack = response.stack;
     }
     throw error;
+  }
+
+  /**
+   * Convenience wrapper over runFunction().
+   * - Ensures initialization
+   * - Generates a unique task id unless provided
+   * - Forwards to runFunction() and returns both id and result
+   *
+   * @param fn Self-contained, serializable function executed on a background thread.
+   *           It must not capture outer scope and must return JSON-serializable data.
+   *           For Hermes release (bytecode-only), set fn.__threadforgeSource to a string with the original source.
+   * @param priority Optional task priority (LOW | NORMAL | HIGH). Defaults to NORMAL.
+   * @param opts Optional id settings:
+   *   - id: explicit task id (enables easy cancellation later)
+   *   - idPrefix: when no id is provided, controls the auto-generated prefix
+   * @returns An object { id, result } where:
+   *   - id: the task id used internally (use this to cancel)
+   *   - result: the function's return value
+   */
+  async run<T>(
+    fn: SerializableWorker<T>,
+    priority: TaskPriority = TaskPriority.NORMAL,
+    opts?: { id?: string; idPrefix?: string },
+  ): Promise<{ id: string; result: T }> {
+    this.ensureInitialized();
+    if (typeof fn !== 'function') {
+      throw new Error('ThreadForge run expects a callable function');
+    }
+    const id = (opts?.id && opts.id.trim()) || this.makeTaskId(opts?.idPrefix ?? 'tf');
+    const result = await this.runFunction<T>(id, fn, priority);
+    return { id, result };
   }
 
   async cancelTask(id: string): Promise<boolean> {
