@@ -133,45 +133,105 @@ Supports React Native ≥ **0.75**, Hermes or JSC.
 ## Example — Non-Blocking Heavy Compute (Mount-Time)
 
 ```tsx
-import { useEffect, useState } from 'react';
-import threadForge, { TaskPriority, ThreadForgeCancelledError } from 'react-native-threadforge';
+import React, { useEffect, useState } from 'react';
+import { SafeAreaView, Text, Button, View, StyleSheet, Alert } from 'react-native';
+import { threadForge, TaskPriority } from 'react-native-threadforge';
 
-export default function Example() {
-  const [result, setResult] = useState<number | null>(null);
+const App = () => {
+  const [ready, setReady] = useState(false);
+  const [progress, setProgress] = useState<{ [key: string]: number }>({});
 
   useEffect(() => {
-    let mounted = true;
-    let unsub: { remove: () => void } | null = null;
+    let unsub: any = null;
 
-    (async () => {
-      await threadForge.initialize(4, { progressThrottleMs: 50 });
-      unsub = threadForge.onProgress((_id, p) => console.log(`Progress: ${Math.round(p * 100)}%`));
-
+    const init = async () => {
       try {
-        const { id, result } = await threadForge.run<number>(
-          (() => {
-            let sum = 0;
-            for (let i = 0; i < 10_000_000; i++) sum += i;
-            return sum;
-          }) as any,
-          TaskPriority.NORMAL,
-          { idPrefix: 'demo' }
-        );
-
-        if (mounted) setResult(result);
+        await threadForge.initialize(4);
+        unsub = threadForge.onProgress((id, value) => {
+          setProgress(prev => ({ ...prev, [id]: value }));
+        });
+        setReady(true);
       } catch (e) {
-        if (e instanceof ThreadForgeCancelledError) console.log('Cancelled');
+        Alert.alert('Init failed', String(e));
       }
-    })();
+    };
 
+    init();
     return () => {
-      mounted = false;
       unsub?.remove?.();
+      threadForge.shutdown();
     };
   }, []);
 
-  return null;
-}
+  const createHeavyMathTask = () => {
+    const fn: any = () => {};
+    fn.__threadforgeSource = `
+      () => {
+        let total = 0;
+        for (let i = 0; i < 1e6; i++) {
+          total += Math.sqrt(i);
+          if (i % 100000 === 0) globalThis.reportProgress?.(i / 1e6);
+        }
+        globalThis.reportProgress?.(1);
+        return { task: 'Heavy Math', sum: total.toFixed(2) };
+      }
+    `;
+    return fn;
+  };
+
+  const createTimerTask = (durationMs = 5000) => {
+    const fn: any = () => {};
+    fn.__threadforgeSource = `
+      () => {
+        const start = Date.now();
+        while (Date.now() - start < ${durationMs}) {
+          const elapsed = Date.now() - start;
+          globalThis.reportProgress?.(elapsed / ${durationMs});
+        }
+        globalThis.reportProgress?.(1);
+        return { task: 'Timer', waited: ${durationMs} };
+      }
+    `;
+    return fn;
+  };
+
+  const runBoth = async () => {
+    if (!ready) return Alert.alert('Wait', 'ThreadForge not initialized');
+
+    try {
+      const [mathRes, timerRes] = await Promise.all([
+        threadForge.runFunction('math', createHeavyMathTask(), TaskPriority.HIGH),
+        threadForge.runFunction('timer', createTimerTask(5000), TaskPriority.NORMAL),
+      ]);
+      Alert.alert('Both Done', JSON.stringify({ mathRes, timerRes }, null, 2));
+    } catch (e) {
+      Alert.alert('Error', String(e));
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <Text style={styles.title}>ThreadForge — Dual Tasks</Text>
+      <Button title="Run Two Background Tasks" onPress={runBoth} disabled={!ready} />
+      <View style={{ marginTop: 24 }}>
+        <Text style={styles.progress}>
+          Heavy Math: {Math.round((progress['math'] ?? 0) * 100)}%
+        </Text>
+        <Text style={styles.progress}>
+          Timer: {Math.round((progress['timer'] ?? 0) * 100)}%
+        </Text>
+      </View>
+    </SafeAreaView>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#111827' },
+  title: { fontSize: 20, color: '#f9fafb', marginBottom: 16 },
+  progress: { color: '#a5b4fc', marginTop: 6, fontSize: 16 },
+});
+
+export default App;
 ```
 
 ---
