@@ -135,7 +135,11 @@ This example works in Debug & Release, with Hermes ON or OFF.
 ```tsx
 import React, { useEffect, useState } from 'react';
 import { SafeAreaView, Text, Button, Alert, StyleSheet } from 'react-native';
-import { threadForge, TaskPriority, ThreadForgeCancelledError } from 'react-native-threadforge';
+import {
+  threadForge,
+  TaskPriority,
+  ThreadForgeCancelledError,
+} from 'react-native-threadforge';
 
 const App = () => {
   const [ready, setReady] = useState(false);
@@ -152,29 +156,63 @@ const App = () => {
   const runHeavyTask = async () => {
     if (!ready) return Alert.alert('Wait', 'ThreadForge not initialized');
 
-    const { id, result } = await threadForge.run(() => {
+    // ✅ Full Hermes-safe function with explicit source
+    const fn: any = () => {
       let sum = 0;
-      for (let i = 0; i < 1e6; i++) sum += Math.sqrt(i);
-      return sum.toFixed(2);
-    }, TaskPriority.HIGH);
+      for (let i = 0; i < 1e6; i++) {
+        sum += Math.sqrt(i);
+        if (i % 100000 === 0) globalThis.reportProgress?.(i / 1e6);
+      }
+      globalThis.reportProgress?.(1);
+      return { message: 'Worker Done', sum: sum.toFixed(2) };
+    };
 
-    Alert.alert('Task Complete', `Result: ${result}`);
+    fn.__threadforgeSource = `
+      () => {
+        let sum = 0;
+        for (let i = 0; i < 1e6; i++) {
+          sum += Math.sqrt(i);
+          if (i % 100000 === 0) globalThis.reportProgress?.(i / 1e6);
+        }
+        globalThis.reportProgress?.(1);
+        return { message: 'Worker Done', sum: sum.toFixed(2) };
+      }
+    `;
+
+    try {
+      const { id, result } = await threadForge.run(fn, TaskPriority.HIGH, { idPrefix: 'heavy' });
+      Alert.alert('Task Complete', `Task ID: ${id}\n${JSON.stringify(result, null, 2)}`);
+    } catch (err) {
+      if (err instanceof ThreadForgeCancelledError)
+        Alert.alert('Cancelled', 'Task was cancelled');
+      else Alert.alert('Error', String(err));
+    }
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>ThreadForge Demo</Text>
+      <Text style={styles.title}>ThreadForge Demo (v1.1.7)</Text>
       <Button title="Run Background Task" onPress={runHeavyTask} disabled={!ready} />
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a' },
-  title: { fontSize: 20, color: '#61dafb', marginBottom: 8 },
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#0f172a',
+  },
+  title: {
+    fontSize: 20,
+    color: '#61dafb',
+    marginBottom: 8,
+  },
 });
 
 export default App;
+
 ```
 
 ---
@@ -184,10 +222,105 @@ export default App;
 Run two independent background threads concurrently.
 
 ```tsx
-const [mathRes, timerRes] = await Promise.all([
-  threadForge.run(() => heavyMathTask(), TaskPriority.HIGH),
-  threadForge.run(() => timerTask(5000), TaskPriority.NORMAL),
-]);
+import React, { useEffect, useState } from 'react';
+import { SafeAreaView, Text, Button, View, StyleSheet, Alert } from 'react-native';
+import { threadForge, TaskPriority } from 'react-native-threadforge';
+
+const App = () => {
+  const [ready, setReady] = useState(false);
+  const [progress, setProgress] = useState<{ [key: string]: number }>({});
+
+  useEffect(() => {
+    let unsub: any = null;
+
+    const init = async () => {
+      try {
+        await threadForge.initialize(4);
+        unsub = threadForge.onProgress((id, value) => {
+          setProgress(prev => ({ ...prev, [id]: value }));
+        });
+        setReady(true);
+      } catch (e) {
+        Alert.alert('Init failed', String(e));
+      }
+    };
+
+    init();
+    return () => {
+      unsub?.remove?.();
+      threadForge.shutdown();
+    };
+  }, []);
+
+  const createHeavyMathTask = () => {
+    const fn: any = () => {};
+    fn.__threadforgeSource = `
+      () => {
+        let total = 0;
+        for (let i = 0; i < 1e6; i++) {
+          total += Math.sqrt(i);
+          if (i % 100000 === 0) globalThis.reportProgress?.(i / 1e6);
+        }
+        globalThis.reportProgress?.(1);
+        return { task: 'Heavy Math', sum: total.toFixed(2) };
+      }
+    `;
+    return fn;
+  };
+
+  const createTimerTask = (durationMs = 5000) => {
+    const fn: any = () => {};
+    fn.__threadforgeSource = `
+      () => {
+        const start = Date.now();
+        while (Date.now() - start < ${durationMs}) {
+          const elapsed = Date.now() - start;
+          globalThis.reportProgress?.(elapsed / ${durationMs});
+        }
+        globalThis.reportProgress?.(1);
+        return { task: 'Timer', waited: ${durationMs} };
+      }
+    `;
+    return fn;
+  };
+
+  const runBoth = async () => {
+    if (!ready) return Alert.alert('Wait', 'ThreadForge not initialized');
+
+    try {
+      const [mathRes, timerRes] = await Promise.all([
+        threadForge.runFunction('math', createHeavyMathTask(), TaskPriority.HIGH),
+        threadForge.runFunction('timer', createTimerTask(5000), TaskPriority.NORMAL),
+      ]);
+      Alert.alert('Both Done', JSON.stringify({ mathRes, timerRes }, null, 2));
+    } catch (e) {
+      Alert.alert('Error', String(e));
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <Text style={styles.title}>ThreadForge — Dual Tasks</Text>
+      <Button title="Run Two Background Tasks" onPress={runBoth} disabled={!ready} />
+      <View style={{ marginTop: 24 }}>
+        <Text style={styles.progress}>
+          Heavy Math: {Math.round((progress['math'] ?? 0) * 100)}%
+        </Text>
+        <Text style={styles.progress}>
+          Timer: {Math.round((progress['timer'] ?? 0) * 100)}%
+        </Text>
+      </View>
+    </SafeAreaView>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#111827' },
+  title: { fontSize: 20, color: '#f9fafb', marginBottom: 16 },
+  progress: { color: '#a5b4fc', marginTop: 6, fontSize: 16 },
+});
+
+export default App;
 ```
 
 ---
