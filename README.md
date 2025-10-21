@@ -117,3 +117,160 @@ Feel free to reach out with feedback, ideas, or questions.
 ---
 
 Enjoy hacking with background threads in React Native 🎉
+
+---
+
+## Quick Start
+
+```
+npm install react-native-threadforge
+# or
+yarn add react-native-threadforge
+```
+
+React Native ≥ 0.75 with Hermes or JSC.
+
+## Usage (mount-time heavy compute, non-blocking UI)
+
+```tsx
+import { useEffect, useState } from 'react';
+import threadForge, { TaskPriority, ThreadForgeCancelledError } from 'react-native-threadforge';
+
+export default function Example() {
+  const [value, setValue] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    let progressUnsub: { remove: () => void } | null = null;
+
+    (async () => {
+      try {
+        await threadForge.initialize(4, { progressThrottleMs: 50 });
+
+        // Optional: subscribe to progress (0..1)
+        progressUnsub = threadForge.onProgress((_taskId, p) => {
+          // console.log(`Progress: ${Math.round(p * 100)}%`);
+        });
+
+        // The worker function must be self-contained and serializable.
+        // For Hermes release (bytecode-only), also provide __threadforgeSource (see note below).
+        const { id, result } = await threadForge.run<number>(
+          (() => {
+            // Heavy CPU work
+            let sum = 0;
+            for (let i = 0; i < 10_000_000; i++) sum += i;
+            return sum;
+          }) as any,
+          TaskPriority.NORMAL,
+          { idPrefix: 'reduce' } // or pass { id: 'my-task-id' } to enable easy cancellation
+        );
+
+        if (mounted) setValue(result);
+      } catch (e: any) {
+        if (e instanceof ThreadForgeCancelledError) {
+          setError('Task was cancelled');
+        } else {
+          setError(e?.message ?? String(e));
+        }
+      }
+    })();
+
+    return () => {
+      mounted = false;
+      if (progressUnsub) progressUnsub.remove();
+    };
+  }, []);
+
+  if (error) return null;
+  return null;
+}
+```
+
+## Cancellation
+
+Use a known taskId. With run(), either supply opts.id or read the returned id.
+
+```ts
+// Start a cancellable task
+const { id, result } = await threadForge.run<number>(
+  (() => {
+    let sum = 0;
+    for (let i = 0; i < 1_000_000_000; i++) {
+      if (i % 10_000_000 === 0) {
+        // if your native side supports it, you can report progress
+        // reportProgress(i / 1_000_000_000);
+      }
+      sum += i;
+    }
+    return sum;
+  }) as any,
+  TaskPriority.HIGH,
+  { id: 'long-task-1' }
+);
+
+// Somewhere else, cancel:
+await threadForge.cancelTask('long-task-1');
+```
+
+When cancelled, the awaiting call rejects with ThreadForgeCancelledError.
+
+## Hermes Release Builds (bytecode-only) and Serialization
+
+Hermes can strip function source in release, which prevents serialization. Your runtime already guards this via the [bytecode] placeholder. To ensure workers run in release, attach explicit source:
+
+```ts
+const worker = (() => {
+  let sum = 0;
+  for (let i = 0; i < 5_000_000; i++) sum += i;
+  return sum;
+}) as any;
+
+worker.__threadforgeSource = `
+  (() => {
+    let sum = 0;
+    for (let i = 0; i < 5000000; i++) sum += i;
+    return sum;
+  })
+`;
+
+const { id, result } = await threadForge.run<number>(worker);
+```
+
+Rules for worker functions:
+
+- Must be self-contained and pure (no captured outer variables).
+- Must return JSON-serializable data (no Map/Set/BigInt/Functions).
+- Avoid React state or RN APIs inside the worker.
+
+## API
+
+```ts
+// Initialize & shutdown
+threadForge.initialize(threadCount?: number, options?: { progressThrottleMs?: number }): Promise<void>;
+threadForge.shutdown(): Promise<void>;
+threadForge.isInitialized(): boolean;
+
+// Core execution (new)
+threadForge.run<T>(
+  fn: () => T,
+  priority?: TaskPriority,
+  opts?: { id?: string; idPrefix?: string }
+): Promise<{ id: string; result: T }>;
+
+// Advanced (existing)
+threadForge.runFunction<T>(id: string, fn: () => T, priority?: TaskPriority): Promise<T>;
+
+// Cancellation & progress
+threadForge.cancelTask(id: string): Promise<boolean>;
+threadForge.onProgress((taskId: string, progress: number) => void): EmitterSubscription;
+
+// Stats
+threadForge.getStats(): Promise<{ threadCount: number; pending: number; active: number }>;
+```
+
+## FAQ
+
+### Can ThreadForge run tasks synchronously?
+
+No. React Native’s JS runs on a single thread; blocking it would freeze the UI. ThreadForge is intentionally async. The run() helper provides a clean, “sync-like” developer experience via await, while keeping UI responsive.
