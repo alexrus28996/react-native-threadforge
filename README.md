@@ -1,27 +1,29 @@
-# 🚀 ThreadForge React Native Showcase
+# ThreadForge React Native Showcase
 
 <p align="center">
   <img src="./docs/assets/threadforge-logo.png" alt="ThreadForge logo" width="380" />
 </p>
 
-**ThreadForge** is a high-performance React Native learning project demonstrating how to push CPU-intensive JavaScript tasks to background threads—without blocking the UI. It consists of:
+**ThreadForge** is a high-performance React Native library and demo project that demonstrates how to offload CPU-intensive JavaScript tasks to background threads — keeping your UI fast and responsive.
 
-- 🎛️ **Demo App (`src/`)** – An interactive React Native UI to initialize the thread pool, launch and cancel sample tasks, track live progress, and inspect stats.
-- 🧩 **ThreadForge Native Module (`packages/react-native-threadforge/`)** – A reusable cross-platform engine that serializes JS functions, executes them in a C++ worker pool, and streams updates/results to JS.
+This repository contains:
 
-> Built and maintained by [**Abhishek Kumar**](https://www.linkedin.com/in/i-am-abhishek-kumar/)
+- 🎛️ **Demo App (`src/`)** — A complete React Native UI showcasing initialization, live progress tracking, cancellation, and performance stats.  
+- 🧩 **ThreadForge Native Module (`packages/react-native-threadforge/`)** — A reusable, cross-platform module that serializes JS functions, executes them on a native C++ worker pool, and streams results back to JS.
+
+> Developed and maintained by [**Abhishek Kumar**](https://www.linkedin.com/in/i-am-abhishek-kumar/)
 
 ---
 
-## ✨ Highlights at a Glance
+## ✨ Key Highlights
 
-| Feature | File/Location |
-|--------|----------------|
-| 🔁 Threaded task execution with cancellation and priority | [`src/index.ts`](./packages/react-native-threadforge/src/index.ts) |
+| Feature | File / Location |
+|----------|-----------------|
+| 🔁 Threaded task execution with cancellation and priority | [`index.ts`](./packages/react-native-threadforge/src/index.ts) |
 | 📡 Real-time progress updates via event emitters | [`ThreadForgeModule.kt`](./packages/react-native-threadforge/android/...), [`ThreadForge.mm`](./packages/react-native-threadforge/ios/...) |
-| ⚙️ Configurable defaults via env vars | [`config.ts`](./packages/react-native-threadforge/src/config.ts) |
-| 🔒 Pre-serialized sources for Hermes compatibility | [`src/tasks`](./src/tasks) |
-| 🧠 UI helpers and alerting | [`showAlert.ts`](./src/utils/showAlert.ts), [`App.tsx`](./src/App.tsx) |
+| ⚙️ Configurable defaults via constants | [`config.ts`](./packages/react-native-threadforge/src/config.ts) |
+| 🔒 Hermes-safe pre-serialized tasks | [`src/tasks`](./src/tasks) |
+| 🧠 UI and alert helpers | [`showAlert.ts`](./src/utils/showAlert.ts), [`App.tsx`](./src/App.tsx) |
 
 ---
 
@@ -31,19 +33,19 @@
 # Install dependencies
 npm install
 
-# Start Metro bundler
+# Start Metro
 npm start
 
 # In another terminal:
 npm run ios     # Requires Xcode + iOS Simulator
-npm run android # Requires Android Studio + Emulator/device
+npm run android # Requires Android Studio or an emulator/device
 ```
 
-⚠️ **Hermes is required**:
-- ✅ Android: `hermesEnabled=true` (already set in [`android/gradle.properties`](./android/gradle.properties))
+⚙️ **Hermes is required**  
+- ✅ Android: `hermesEnabled=true` (already set in [`android/gradle.properties`](./android/gradle.properties))  
 - ✅ iOS: `use_hermes!` enabled in [`ios/Podfile`](./ios/Podfile)
 
-Run tests and lint checks:
+Run verification tasks:
 ```bash
 npm test
 npm run lint
@@ -53,215 +55,186 @@ npm run lint
 
 ## 🔍 Demo Task Gallery
 
-UI logic lives in [`App.tsx`](./src/App.tsx) and wires to serializable factories using `ThreadTask` wrappers. This ensures the function body survives Hermes bytecode stripping.
+The demo app (in [`App.tsx`](./src/App.tsx)) showcases various threaded workloads, all implemented as serializable, Hermes-safe task factories.
 
-| Task | File | Purpose |
-|------|------|---------|
-| 📐 Heavy Math | [`heavyMath.ts`](./src/tasks/heavyMath.ts) | Square root calculations with progress emission |
-| ⏲️ Timer | [`timer.ts`](./src/tasks/timer.ts) | Delay-based task with cancelation support |
-| 💬 Instant Message | [`instantMessage.ts`](./src/tasks/instantMessage.ts) | Lightweight task with instant return |
-| 🖼️ Image Simulation | [`imageProcessing.ts`](./src/tasks/imageProcessing.ts) | Simulated pixel computation |
-| 📊 Analytics | [`analytics.ts`](./src/tasks/analytics.ts) | Batch process fake events and return a summary |
+| Task | File | Description |
+|------|------|-------------|
+| 📐 **Heavy Math** | [`heavyMath.ts`](./src/tasks/heavyMath.ts) | Performs millions of square root operations with progress updates |
+| ⏲️ **Timer** | [`timer.ts`](./src/tasks/timer.ts) | Simulates long-running delays with cancel support |
+| 💬 **Instant Message** | [`instantMessage.ts`](./src/tasks/instantMessage.ts) | Lightweight synchronous result |
+| 🖼️ **Image Simulation** | [`imageProcessing.ts`](./src/tasks/imageProcessing.ts) | Mock pixel-level computation |
+| 📊 **Analytics** | [`analytics.ts`](./src/tasks/analytics.ts) | Aggregates fake data for summary output |
 
-🔄 **Bonus:** Run multiple jobs in parallel or cancel them interactively with built-in buttons!
-
----
-
-## 🏗️ Native Architecture
-
-| Layer | Responsibilities |
-|-------|------------------|
-| **JavaScript (TS)** | Input validation, task serialization, native communication, and result parsing |
-| **Android (Kotlin + JNI)** | Calls into C++ pool, ensures Hermes is live, and emits progress events |
-| **iOS (Objective-C++)** | GCD-based worker bridge, forwards events using RN emitter |
-| **C++ Core** | Owns `ThreadPool`, `FunctionExecutor`, JSON serialization of results/errors |
-
-🔁 Both platforms expose a unified API: `initialize`, `runFunction`, `cancelTask`, `getStats`, and `shutdown`
+> You can run multiple jobs in parallel and cancel them interactively within the UI.
 
 ---
 
-## 🗂️ Repository Structure
+## 🏗️ Native Architecture Overview
+
+| Layer | Role |
+|-------|------|
+| **JavaScript (TypeScript)** | Handles task serialization, validation, and native event communication |
+| **Android (Kotlin + JNI)** | Connects to native C++ pool, manages Hermes VMs, emits progress events |
+| **iOS (Objective-C++)** | Uses GCD threads, bridges events to JS |
+| **C++ Core** | Manages thread pool, executes functions, and serializes results/errors |
+
+✅ Unified API across all platforms:  
+`initialize`, `runFunction`, `cancelTask`, `getStats`, and `shutdown`.
+
+---
+
+## 🗂️ Project Structure
 
 ```
-├─ App.tsx                        # Entrypoint to the demo app
-├─ src/                           # Demo UI, task factories, utilities
+├─ App.tsx                        # Demo entry point
+├─ src/                           # UI components, task factories, utilities
 ├─ packages/
 │  └─ react-native-threadforge/
-│     ├─ android/                 # Android bridge (Kotlin + JNI)
-│     ├─ ios/                     # iOS native module (Obj-C++)
-│     ├─ cpp/                     # Cross-platform C++ core logic
+│     ├─ android/                 # Android native bridge
+│     ├─ ios/                     # iOS native bridge
+│     ├─ cpp/                     # Shared C++ thread pool and logic
 │     └─ src/                     # TypeScript interface and public API
-├─ docs/                          # Images and documentation assets
-└─ __tests__/                     # Jest unit tests for helpers
+├─ docs/                          # Documentation and assets
+└─ __tests__/                     # Jest unit tests
 ```
 
 ---
 
 ## 👨‍💻 Author
 
-- **Abhishek Kumar**  
-  [LinkedIn ↗](https://www.linkedin.com/in/i-am-abhishek-kumar/)
-
-Feel free to reach out with feedback, ideas, or questions.
+**Abhishek Kumar**  
+[LinkedIn ↗](https://www.linkedin.com/in/i-am-abhishek-kumar/)
 
 ---
 
-## 💡 Tips & Best Practices
+## 💡 Best Practices
 
-- ✅ Always call `shutdown()` after task execution to clean up resources
-- 🔍 Use `getStats()` to monitor thread pool state and task load
-- 🔧 Use `progressThrottleMs` to reduce bridge overhead for rapid updates
-- 📤 Use `__threadforgeSource` in release mode to ensure function source isn't stripped
-- 🧼 Keep your worklet functions pure and free from closures or external references
-
----
-
-Enjoy hacking with background threads in React Native 🎉
+- ✅ Always call `shutdown()` after tasks complete  
+- 🔍 Use `getStats()` to monitor pool status  
+- ⚙️ Adjust `progressThrottleMs` for high-frequency updates  
+- 🧩 Always define `__threadforgeSource` for Hermes release builds  
+- 🧼 Keep worker functions pure — no closures, state, or React hooks  
 
 ---
 
-## Quick Start
+## ⚡ Quick Start with Library
 
-```
+Install:
+```bash
 npm install react-native-threadforge
 # or
 yarn add react-native-threadforge
 ```
 
-React Native ≥ 0.75 with Hermes or JSC.
+Supports React Native ≥ **0.75**, Hermes or JSC.
 
-## Usage (mount-time heavy compute, non-blocking UI)
+---
+
+## Example — Non-Blocking Heavy Compute (Mount-Time)
 
 ```tsx
 import { useEffect, useState } from 'react';
 import threadForge, { TaskPriority, ThreadForgeCancelledError } from 'react-native-threadforge';
 
 export default function Example() {
-  const [value, setValue] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<number | null>(null);
 
   useEffect(() => {
     let mounted = true;
-    let progressUnsub: { remove: () => void } | null = null;
+    let unsub: { remove: () => void } | null = null;
 
     (async () => {
+      await threadForge.initialize(4, { progressThrottleMs: 50 });
+      unsub = threadForge.onProgress((_id, p) => console.log(`Progress: ${Math.round(p * 100)}%`));
+
       try {
-        await threadForge.initialize(4, { progressThrottleMs: 50 });
-
-        // Optional: subscribe to progress (0..1)
-        progressUnsub = threadForge.onProgress((_taskId, p) => {
-          // console.log(`Progress: ${Math.round(p * 100)}%`);
-        });
-
-        // The worker function must be self-contained and serializable.
-        // For Hermes release (bytecode-only), also provide __threadforgeSource (see note below).
         const { id, result } = await threadForge.run<number>(
           (() => {
-            // Heavy CPU work
             let sum = 0;
             for (let i = 0; i < 10_000_000; i++) sum += i;
             return sum;
           }) as any,
           TaskPriority.NORMAL,
-          { idPrefix: 'reduce' } // or pass { id: 'my-task-id' } to enable easy cancellation
+          { idPrefix: 'demo' }
         );
 
-        if (mounted) setValue(result);
-      } catch (e: any) {
-        if (e instanceof ThreadForgeCancelledError) {
-          setError('Task was cancelled');
-        } else {
-          setError(e?.message ?? String(e));
-        }
+        if (mounted) setResult(result);
+      } catch (e) {
+        if (e instanceof ThreadForgeCancelledError) console.log('Cancelled');
       }
     })();
 
     return () => {
       mounted = false;
-      if (progressUnsub) progressUnsub.remove();
+      unsub?.remove?.();
     };
   }, []);
 
-  if (error) return null;
   return null;
 }
 ```
 
-## Cancellation
+---
 
-Use a known taskId. With run(), either supply opts.id or read the returned id.
+## 🛑 Task Cancellation
 
 ```ts
-// Start a cancellable task
-const { id, result } = await threadForge.run<number>(
+// Start task
+const { id } = await threadForge.run<number>(
   (() => {
-    let sum = 0;
-    for (let i = 0; i < 1_000_000_000; i++) {
-      if (i % 10_000_000 === 0) {
-        // if your native side supports it, you can report progress
-        // reportProgress(i / 1_000_000_000);
-      }
-      sum += i;
-    }
-    return sum;
+    let total = 0;
+    for (let i = 0; i < 1_000_000_000; i++) total += i;
+    return total;
   }) as any,
   TaskPriority.HIGH,
   { id: 'long-task-1' }
 );
 
-// Somewhere else, cancel:
+// Cancel anytime
 await threadForge.cancelTask('long-task-1');
 ```
 
-When cancelled, the awaiting call rejects with ThreadForgeCancelledError.
+Cancellation throws a `ThreadForgeCancelledError` in JS.
 
-## Hermes Release Builds (bytecode-only) and Serialization
+---
 
-Hermes can strip function source in release, which prevents serialization. Your runtime already guards this via the [bytecode] placeholder. To ensure workers run in release, attach explicit source:
+## 🧩 Hermes Release Mode & Serialization
+
+Hermes may strip function sources in release. Always attach explicit code:
 
 ```ts
-const worker = (() => {
-  let sum = 0;
-  for (let i = 0; i < 5_000_000; i++) sum += i;
-  return sum;
-}) as any;
-
-worker.__threadforgeSource = `
+const fn: any = () => {};
+fn.__threadforgeSource = `
   (() => {
     let sum = 0;
-    for (let i = 0; i < 5000000; i++) sum += i;
+    for (let i = 0; i < 5_000_000; i++) sum += i;
     return sum;
   })
 `;
 
-const { id, result } = await threadForge.run<number>(worker);
+const { id, result } = await threadForge.run(fn);
 ```
 
-Rules for worker functions:
+### Function Rules
+- Must be **pure and self-contained**  
+- Must return **JSON-serializable** results  
+- Avoid React hooks, closures, or external variables  
 
-- Must be self-contained and pure (no captured outer variables).
-- Must return JSON-serializable data (no Map/Set/BigInt/Functions).
-- Avoid React state or RN APIs inside the worker.
+---
 
-## API
+## 🧠 API Reference
 
 ```ts
-// Initialize & shutdown
+// Initialization
 threadForge.initialize(threadCount?: number, options?: { progressThrottleMs?: number }): Promise<void>;
 threadForge.shutdown(): Promise<void>;
 threadForge.isInitialized(): boolean;
 
-// Core execution (new)
-threadForge.run<T>(
-  fn: () => T,
-  priority?: TaskPriority,
-  opts?: { id?: string; idPrefix?: string }
-): Promise<{ id: string; result: T }>;
-
-// Advanced (existing)
+// Execution
+threadForge.run<T>(fn: () => T, priority?: TaskPriority, opts?: { id?: string; idPrefix?: string }): Promise<{ id: string; result: T }>;
 threadForge.runFunction<T>(id: string, fn: () => T, priority?: TaskPriority): Promise<T>;
 
-// Cancellation & progress
+// Control
 threadForge.cancelTask(id: string): Promise<boolean>;
 threadForge.onProgress((taskId: string, progress: number) => void): EmitterSubscription;
 
@@ -269,8 +242,15 @@ threadForge.onProgress((taskId: string, progress: number) => void): EmitterSubsc
 threadForge.getStats(): Promise<{ threadCount: number; pending: number; active: number }>;
 ```
 
-## FAQ
+---
+
+## ❓ FAQ
 
 ### Can ThreadForge run tasks synchronously?
+No. React Native’s JavaScript runs on a single thread — synchronous blocking would freeze your UI.  
+`run()` gives a **sync-like** `await` experience while executing safely in background threads.
 
-No. React Native’s JS runs on a single thread; blocking it would freeze the UI. ThreadForge is intentionally async. The run() helper provides a clean, “sync-like” developer experience via await, while keeping UI responsive.
+---
+
+Enjoy blazing-fast, thread-safe performance in React Native ⚡  
+**ThreadForge — where background work meets native speed.**
